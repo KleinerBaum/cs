@@ -13,7 +13,7 @@ MAX_EVIDENCE_CHARS = 220
 
 # ---- ESCO
 ESCO_BASE_URL = "https://ec.europa.eu/esco/api"
-ESCO_DEFAULT_VERSION = None  # e.g. "v1.2.0" if you want to pin
+ESCO_DEFAULT_VERSION = None  # e.g. "v1.2.0" if you want to pin a specific version
 
 # ---- Networking
 REQUEST_TIMEOUT_S = 20
