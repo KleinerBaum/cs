@@ -1,7 +1,7 @@
 # src/wizard/question_engine.py
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional
 
 from cogstaff.schema.profile_document import (
@@ -14,6 +14,7 @@ from cogstaff.wizard.steps import StepId
 
 # ---------- i18n primitive ----------
 
+
 @dataclass(frozen=True)
 class I18nText:
     de: str
@@ -24,6 +25,7 @@ class I18nText:
 
 
 # ---------- helper: missing / confirm logic ----------
+
 
 def _is_missing(value: Any) -> bool:
     if value is None:
@@ -99,6 +101,7 @@ class QuestionSpec:
     """
     A single question = 1 widget (usually) mapped to one or more profile paths.
     """
+
     id: str
     step: StepId
     paths: tuple[str, ...]
@@ -106,7 +109,9 @@ class QuestionSpec:
     help: Optional[I18nText] = None
 
     # Streamlit widget type your renderer will map
-    widget: str = "text"  # text|textarea|select|multiselect|number|checkbox|tri_bool|list_text
+    widget: str = (
+        "text"  # text|textarea|select|multiselect|number|checkbox|tri_bool|list_text
+    )
 
     # ranking / visibility
     required: bool = False
@@ -160,7 +165,9 @@ class QuestionEngine:
         """
         result: dict[StepId, StepPlan] = {}
         for step in StepId:
-            result[step] = self.plan_step(doc, step, max_primary=10, include_detail=True)
+            result[step] = self.plan_step(
+                doc, step, max_primary=10, include_detail=True
+            )
         return result
 
     def plan_step(
@@ -172,7 +179,11 @@ class QuestionEngine:
         include_detail: bool = False,
         extra_questions: Iterable[QuestionSpec] = (),
     ) -> StepPlan:
-        candidates = [q for q in (self._catalog + list(extra_questions)) if q.step == step and q.show_if(doc)]
+        candidates = [
+            q
+            for q in (self._catalog + list(extra_questions))
+            if q.step == step and q.show_if(doc)
+        ]
 
         planned: list[PlannedQuestion] = []
         required_total = sum(1 for q in candidates if q.required)
@@ -219,7 +230,9 @@ class QuestionEngine:
             optional_remaining=optional_remaining,
         )
 
-    def critical_paths_for_llm(self, doc: NeedAnalysisProfileDocument, step: StepId) -> list[str]:
+    def critical_paths_for_llm(
+        self, doc: NeedAnalysisProfileDocument, step: StepId
+    ) -> list[str]:
         """
         Feed this into optional LLM-followups: only required + still missing/confirm.
         """
@@ -251,7 +264,9 @@ class QuestionEngine:
         without changing the values.
         Returns count affected paths.
         """
-        from cogstaff.schema.profile_document import FieldProvenance  # local to avoid cycles
+        from cogstaff.schema.profile_document import (
+            FieldProvenance,
+        )  # local to avoid cycles
 
         touched = 0
         for pq in (*plan.primary, *plan.detail):

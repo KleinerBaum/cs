@@ -12,14 +12,17 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl
 # Enums / shared primitives
 # =========================
 
+
 class LanguageCode(str, Enum):
     """UI / output language selection."""
+
     DE = "de"
     EN = "en"
 
 
 class DetectedLanguage(str, Enum):
     """Language detected from the imported job ad."""
+
     DE = "de"
     EN = "en"
     MIXED = "mixed"
@@ -28,9 +31,10 @@ class DetectedLanguage(str, Enum):
 
 class FieldSource(str, Enum):
     """Where a specific field value came from."""
-    EXTRACTED = "extracted"         # from URL/file parsing + extraction
-    USER = "user"                   # human confirmed / edited
-    AI_SUGGESTION = "ai_suggestion" # AI enrichment (not yet confirmed)
+
+    EXTRACTED = "extracted"  # from URL/file parsing + extraction
+    USER = "user"  # human confirmed / edited
+    AI_SUGGESTION = "ai_suggestion"  # AI enrichment (not yet confirmed)
 
 
 class WorkPolicy(str, Enum):
@@ -76,6 +80,7 @@ class SalaryPeriod(str, Enum):
 # Provenance
 # =========================
 
+
 class FieldProvenance(BaseModel):
     """
     Metadata per profile field (keyed by canonical dot-path).
@@ -85,6 +90,7 @@ class FieldProvenance(BaseModel):
       - low confidence -> ask/confirm
       - user-confirmed -> do not ask again
     """
+
     model_config = ConfigDict(extra="forbid")
 
     source: FieldSource
@@ -103,6 +109,7 @@ class FieldProvenance(BaseModel):
 # =========================
 # Profile schema (industry-agnostic)
 # =========================
+
 
 class Company(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
@@ -329,6 +336,7 @@ class NeedAnalysisProfile(BaseModel):
     Industry-agnostic, bilingual-friendly structured profile.
     Store *content* in whichever language you imported/edited; UI i18n is separate.
     """
+
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
@@ -353,6 +361,7 @@ class NeedAnalysisProfile(BaseModel):
 # Root document: profile + provenance + import context
 # =========================
 
+
 class InputKind(str, Enum):
     URL = "url"
     FILE = "file"
@@ -375,6 +384,7 @@ class NeedAnalysisProfileDocument(BaseModel):
     """
     This is the single object you pass around in your Streamlit app.
     """
+
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
@@ -397,6 +407,7 @@ class NeedAnalysisProfileDocument(BaseModel):
 # Dot-path helpers + update API (keeps profile & provenance in sync)
 # =========================
 
+
 def _split_path(path: str) -> List[str]:
     return [p for p in path.split(".") if p]
 
@@ -406,12 +417,16 @@ def get_value_by_path(model: BaseModel, path: str) -> Any:
     for part in _split_path(path):
         if isinstance(current, BaseModel):
             if not hasattr(current, part):
-                raise AttributeError(f"Unknown field '{part}' on {type(current).__name__} while reading '{path}'")
+                raise AttributeError(
+                    f"Unknown field '{part}' on {type(current).__name__} while reading '{path}'"
+                )
             current = getattr(current, part)
         elif isinstance(current, dict):
             current = current.get(part)
         else:
-            raise TypeError(f"Cannot traverse into {type(current).__name__} at '{part}' while reading '{path}'")
+            raise TypeError(
+                f"Cannot traverse into {type(current).__name__} at '{part}' while reading '{path}'"
+            )
     return current
 
 
@@ -423,26 +438,36 @@ def set_value_by_path(model: BaseModel, path: str, value: Any) -> None:
     for part in parts[:-1]:
         if isinstance(current, BaseModel):
             if not hasattr(current, part):
-                raise AttributeError(f"Unknown field '{part}' on {type(current).__name__} while writing '{path}'")
+                raise AttributeError(
+                    f"Unknown field '{part}' on {type(current).__name__} while writing '{path}'"
+                )
             nxt = getattr(current, part)
             if nxt is None:
-                raise ValueError(f"Cannot traverse through None at '{part}' while writing '{path}'")
+                raise ValueError(
+                    f"Cannot traverse through None at '{part}' while writing '{path}'"
+                )
             current = nxt
         elif isinstance(current, dict):
             if part not in current or current[part] is None:
                 current[part] = {}
             current = current[part]
         else:
-            raise TypeError(f"Cannot traverse into {type(current).__name__} at '{part}' while writing '{path}'")
+            raise TypeError(
+                f"Cannot traverse into {type(current).__name__} at '{part}' while writing '{path}'"
+            )
     last = parts[-1]
     if isinstance(current, BaseModel):
         if not hasattr(current, last):
-            raise AttributeError(f"Unknown field '{last}' on {type(current).__name__} while writing '{path}'")
+            raise AttributeError(
+                f"Unknown field '{last}' on {type(current).__name__} while writing '{path}'"
+            )
         setattr(current, last, value)
     elif isinstance(current, dict):
         current[last] = value
     else:
-        raise TypeError(f"Cannot set on {type(current).__name__} at '{last}' while writing '{path}'")
+        raise TypeError(
+            f"Cannot set on {type(current).__name__} at '{last}' while writing '{path}'"
+        )
 
 
 def update_field(

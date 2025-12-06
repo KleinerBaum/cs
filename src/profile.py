@@ -87,19 +87,41 @@ def upsert_field(
     value = _jsonable(value)
     existing = get_record(profile, path)
 
-    if existing and prefer_existing_user and existing.get("provenance") == "user" and provenance != "user":
+    if (
+        existing
+        and prefer_existing_user
+        and existing.get("provenance") == "user"
+        and provenance != "user"
+    ):
         return False
 
     # If value is empty-ish, don't overwrite a filled field
-    if existing and not is_missing_value(existing.get("value")) and is_missing_value(value):
+    if (
+        existing
+        and not is_missing_value(existing.get("value"))
+        and is_missing_value(value)
+    ):
         return False
 
     # If both have confidences, keep the higher-confidence value
     ex_conf = existing.get("confidence") if existing else None
-    if existing and ex_conf is not None and confidence is not None and ex_conf >= confidence and provenance != "user":
+    if (
+        existing
+        and ex_conf is not None
+        and confidence is not None
+        and ex_conf >= confidence
+        and provenance != "user"
+    ):
         return False
 
-    set_field(profile, path, value, provenance=provenance, confidence=confidence, evidence=evidence)
+    set_field(
+        profile,
+        path,
+        value,
+        provenance=provenance,
+        confidence=confidence,
+        evidence=evidence,
+    )
     return True
 
 
@@ -124,7 +146,9 @@ def missing_required(profile: dict[str, Any]) -> list[str]:
     return [p for p in sorted(REQUIRED_FIELDS) if is_missing(profile, p)]
 
 
-def flatten_values(profile: dict[str, Any], include_meta: bool = False) -> dict[str, Any]:
+def flatten_values(
+    profile: dict[str, Any], include_meta: bool = False
+) -> dict[str, Any]:
     out = {path: rec.get("value") for path, rec in profile.get("fields", {}).items()}
     if include_meta:
         out = {"_meta": copy.deepcopy(profile.get("meta", {})), **out}

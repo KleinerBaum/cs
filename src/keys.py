@@ -3,6 +3,7 @@ from __future__ import annotations
 # Central place for ALL dot-path keys.
 # Any UI label, prompt, rule, or export must reference these constants.
 
+
 class Keys:
     # --- Company
     COMPANY_NAME = "company.name"  # required
@@ -95,7 +96,11 @@ REQUIRED_FIELDS: set[str] = {
 }
 
 # All known fields (including optional enrichment)
-ALL_FIELDS: set[str] = {value for name, value in Keys.__dict__.items() if name.isupper() and isinstance(value, str)}
+ALL_FIELDS: set[str] = {
+    value
+    for name, value in Keys.__dict__.items()
+    if name.isupper() and isinstance(value, str)
+}
 
 # Enumerations (stored as stable machine values in the profile)
 WORK_POLICY_VALUES = ("onsite", "hybrid", "remote")

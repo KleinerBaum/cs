@@ -8,7 +8,13 @@ import streamlit as st
 
 from .esco_client import ESCOError, occupation_related_skills, search_occupations
 from .i18n import LANG_DE, LANG_EN, as_lang, option_label, t
-from .ingest import SourceDocument, extract_text_from_upload, fetch_text_from_url
+from .ingest import (
+    IngestError,
+    SourceDocument,
+    extract_text_from_upload,
+    fetch_text_from_url,
+    source_from_text,
+)
 from .keys import ALL_FIELDS, REQUIRED_FIELDS, Keys
 from .llm_client import LLMClient, safe_parse_json
 from .llm_prompts import (
@@ -40,7 +46,13 @@ from .question_engine import (
 )
 from .rendering import export_docx_bytes, render_job_ad_markdown
 from .settings import APP_NAME, MAX_SOURCE_TEXT_CHARS
-from .utils import clamp_str, extract_emails, extract_urls, list_to_multiline, multiline_to_list
+from .utils import (
+    clamp_str,
+    extract_emails,
+    extract_urls,
+    list_to_multiline,
+    multiline_to_list,
+)
 
 
 SS_PROFILE = "profile"
@@ -158,11 +170,22 @@ def run_app() -> None:
             secret_key = None
 
         api_key_default = st.session_state.get(SS_OPENAI_KEY) or secret_key or ""
-        api_key = st.text_input(t(lang, "sidebar.openai_key"), type="password", value=api_key_default, key=SS_OPENAI_KEY)
+        api_key = st.text_input(
+            t(lang, "sidebar.openai_key"),
+            type="password",
+            value=api_key_default,
+            key=SS_OPENAI_KEY,
+        )
 
-        model = st.text_input(t(lang, "sidebar.model"), value=st.session_state[SS_MODEL], key=SS_MODEL)
-        st.session_state[SS_USE_ESCO] = st.checkbox(t(lang, "sidebar.use_esco"), value=st.session_state[SS_USE_ESCO])
-        st.session_state[SS_AUTO_AI] = st.checkbox(t(lang, "sidebar.auto_ai"), value=st.session_state[SS_AUTO_AI])
+        model = st.text_input(
+            t(lang, "sidebar.model"), value=st.session_state[SS_MODEL], key=SS_MODEL
+        )
+        st.session_state[SS_USE_ESCO] = st.checkbox(
+            t(lang, "sidebar.use_esco"), value=st.session_state[SS_USE_ESCO]
+        )
+        st.session_state[SS_AUTO_AI] = st.checkbox(
+            t(lang, "sidebar.auto_ai"), value=st.session_state[SS_AUTO_AI]
+        )
 
         if st.button(t(lang, "sidebar.reset")):
             _reset_session()
@@ -193,9 +216,13 @@ def run_app() -> None:
 
     nav_cols = st.columns([1, 6, 1])
     with nav_cols[0]:
-        st.button(t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake")
+        st.button(
+            t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake"
+        )
     with nav_cols[2]:
-        st.button(t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review")
+        st.button(
+            t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review"
+        )
 
     st.divider()
 
@@ -206,15 +233,24 @@ def run_app() -> None:
         _render_review(profile, lang=lang)
         return
 
-    _render_questions_step(profile, step=current_step, api_key=api_key, model=model, lang=lang)
+    _render_questions_step(
+        profile, step=current_step, api_key=api_key, model=model, lang=lang
+    )
 
 
-def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: str) -> None:
+def _render_intake(
+    profile: dict[str, Any], *, api_key: str, model: str, lang: str
+) -> None:
     st.markdown(f"## {t(lang, 'intake.title')}")
     st.caption(t(lang, "intake.subtitle"))
 
     url = st.text_input(t(lang, "intake.url"), placeholder="https://…")
     upload = st.file_uploader(t(lang, "intake.file"), type=["pdf", "docx"])
+    pasted_text = st.text_area(
+        t(lang, "intake.paste"),
+        placeholder=t(lang, "intake.paste_placeholder"),
+        height=200,
+    )
 
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -226,20 +262,40 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
         doc = st.session_state.get(SS_SOURCE_DOC)
         if doc and isinstance(doc, dict) and doc.get("text"):
             st.markdown(f"### {t(lang, 'intake.source_preview')}")
-            st.text_area(" ", value=doc.get("text", "")[:3000], height=250, label_visibility="collapsed")
+            st.text_area(
+                " ",
+                value=doc.get("text", "")[:3000],
+                height=250,
+                label_visibility="collapsed",
+            )
         return
 
     source_doc: SourceDocument | None = None
+    provided_sources = sum(
+        1
+        for candidate in (
+            upload is not None,
+            bool(url.strip()),
+            bool(pasted_text.strip()),
+        )
+        if candidate
+    )
+    if provided_sources == 0:
+        st.warning(t(lang, "intake.need_source"))
+        return
+    if provided_sources > 1:
+        st.warning(t(lang, "intake.single_source"))
+        return
+
     try:
         if upload is not None:
             source_doc = extract_text_from_upload(upload)
         elif url.strip():
             source_doc = fetch_text_from_url(url.strip())
         else:
-            st.warning(t(lang, "intake.need_source"))
-            return
-    except Exception as e:
-        st.error(f"{t(lang, 'intake.import_failed')}: {e}")
+            source_doc = source_from_text(pasted_text)
+    except IngestError as exc:
+        st.error(f"{t(lang, 'intake.import_failed')}: {exc}")
         return
 
     st.session_state[SS_SOURCE_DOC] = {
@@ -252,9 +308,23 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
     emails = extract_emails(source_doc.text)
     urls = extract_urls(source_doc.text)
     if emails and (get_value(profile, Keys.COMPANY_CONTACT_EMAIL) in {None, ""}):
-        set_field(profile, Keys.COMPANY_CONTACT_EMAIL, emails[0], provenance="extracted", confidence=0.55, evidence="regex")
+        set_field(
+            profile,
+            Keys.COMPANY_CONTACT_EMAIL,
+            emails[0],
+            provenance="extracted",
+            confidence=0.55,
+            evidence="regex",
+        )
     if urls and (get_value(profile, Keys.COMPANY_WEBSITE) in {None, ""}):
-        set_field(profile, Keys.COMPANY_WEBSITE, urls[0], provenance="extracted", confidence=0.50, evidence="regex")
+        set_field(
+            profile,
+            Keys.COMPANY_WEBSITE,
+            urls[0],
+            provenance="extracted",
+            confidence=0.50,
+            evidence="regex",
+        )
 
     if not api_key:
         st.warning(t(lang, "intake.no_openai_key"))
@@ -320,10 +390,20 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
             conf_f = float(conf) if isinstance(conf, (int, float)) else None
             evidence = clamp_str(evidence, 220) if isinstance(evidence, str) else None
 
-            if upsert_field(profile, path, value, provenance="extracted", confidence=conf_f, evidence=evidence, prefer_existing_user=True):
+            if upsert_field(
+                profile,
+                path,
+                value,
+                provenance="extracted",
+                confidence=conf_f,
+                evidence=evidence,
+                prefer_existing_user=True,
+            ):
                 updated += 1
 
-        st.success(f"{t(lang, 'intake.extract_done')} {t(lang, 'intake.updated_fields')}: {updated}")
+        st.success(
+            f"{t(lang, 'intake.extract_done')} {t(lang, 'intake.updated_fields')}: {updated}"
+        )
         st.session_state[SS_PROFILE] = profile
         st.session_state[SS_STEP] = "company"
         st.rerun()
@@ -332,7 +412,9 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
         st.session_state[SS_PROFILE] = profile
 
 
-def _render_questions_step(profile: dict[str, Any], *, step: str, api_key: str, model: str, lang: str) -> None:
+def _render_questions_step(
+    profile: dict[str, Any], *, step: str, api_key: str, model: str, lang: str
+) -> None:
     st.markdown(f"## {t(lang, _STEP_LABEL_KEYS.get(step, step))}")
 
     missing_step = missing_required_for_step(profile, step)
@@ -343,7 +425,9 @@ def _render_questions_step(profile: dict[str, Any], *, step: str, api_key: str, 
     _render_question_list(profile, primary, step=step, lang=lang)
 
     with st.expander(t(lang, "ui.more_details"), expanded=False):
-        _render_question_list(profile, more, step=step, lang=lang, advanced_section=True)
+        _render_question_list(
+            profile, more, step=step, lang=lang, advanced_section=True
+        )
 
         # Optional: generate English variants for key fields (title + skills/tools)
         if step == "skills":
@@ -358,7 +442,9 @@ def _render_questions_step(profile: dict[str, Any], *, step: str, api_key: str, 
             with col_tr_hint:
                 st.caption(t(lang, "ui.translate_hint"))
             if do_translate:
-                _translate_fields_to_english(profile, api_key=api_key, model=model, lang=lang)
+                _translate_fields_to_english(
+                    profile, api_key=api_key, model=model, lang=lang
+                )
 
         # ESCO integration best fits in skills step
         if step == "skills" and st.session_state.get(SS_USE_ESCO, True):
@@ -387,7 +473,14 @@ def _render_questions_step(profile: dict[str, Any], *, step: str, api_key: str, 
             _render_ai_followup(profile, q, step=step, idx=i, lang=lang)
 
 
-def _render_question_list(profile: dict[str, Any], questions: list[Any], *, step: str, lang: str, advanced_section: bool = False) -> None:
+def _render_question_list(
+    profile: dict[str, Any],
+    questions: list[Any],
+    *,
+    step: str,
+    lang: str,
+    advanced_section: bool = False,
+) -> None:
     if not questions:
         st.caption(t(lang, "ui.empty"))
 
@@ -474,7 +567,11 @@ def _render_question_list(profile: dict[str, Any], questions: list[Any], *, step
             raw_list = get_value(profile, q.path)
             st.text_area(
                 label,
-                value=list_to_multiline(raw_list if isinstance(raw_list, list) else multiline_to_list(str(raw_list or ""))),
+                value=list_to_multiline(
+                    raw_list
+                    if isinstance(raw_list, list)
+                    else multiline_to_list(str(raw_list or ""))
+                ),
                 help=help_txt or None,
                 key=widget_key,
                 height=140,
@@ -530,11 +627,15 @@ def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
             clear_field(profile, path)
             return
 
-    set_field(profile, path, value, provenance="user", confidence=1.0, evidence="user_input")
+    set_field(
+        profile, path, value, provenance="user", confidence=1.0, evidence="user_input"
+    )
     st.session_state[SS_PROFILE] = profile
 
 
-def _generate_ai_followups(step: str, api_key: str, model: str, lang: str, silent: bool = False) -> None:
+def _generate_ai_followups(
+    step: str, api_key: str, model: str, lang: str, silent: bool = False
+) -> None:
     profile: dict[str, Any] = st.session_state[SS_PROFILE]
     if not api_key:
         return
@@ -547,12 +648,18 @@ def _generate_ai_followups(step: str, api_key: str, model: str, lang: str, silen
         st.session_state[SS_AI_FOLLOWUPS][step] = []
         return
 
-    context = {"company": get_value(profile, Keys.COMPANY_NAME), "job_title": get_value(profile, Keys.POSITION_TITLE), "step": step}
+    context = {
+        "company": get_value(profile, Keys.COMPANY_NAME),
+        "job_title": get_value(profile, Keys.POSITION_TITLE),
+        "step": step,
+    }
 
     try:
         client = LLMClient(api_key=api_key, model=model)
         raw = client.text(
-            followup_user_prompt(miss_req, miss_opt[:20], context=json.dumps(context, ensure_ascii=False)),
+            followup_user_prompt(
+                miss_req, miss_opt[:20], context=json.dumps(context, ensure_ascii=False)
+            ),
             instructions=FOLLOWUP_INSTRUCTIONS,
             temperature=0.2,
             max_output_tokens=900,
@@ -574,7 +681,15 @@ def _generate_ai_followups(step: str, api_key: str, model: str, lang: str, silen
                 opts = [str(x) for x in opts if str(x).strip()]
             else:
                 opts = None
-            cleaned.append({"target_path": path, "answer_type": str(answer_type), "question_de": str(question_de), "question_en": str(question_en), "options": opts})
+            cleaned.append(
+                {
+                    "target_path": path,
+                    "answer_type": str(answer_type),
+                    "question_de": str(question_de),
+                    "question_en": str(question_en),
+                    "options": opts,
+                }
+            )
         st.session_state[SS_AI_FOLLOWUPS][step] = cleaned[:7]
         if not silent:
             st.success(f"{t(lang, 'ai.followups_done')}: {len(cleaned[:7])}")
@@ -583,7 +698,9 @@ def _generate_ai_followups(step: str, api_key: str, model: str, lang: str, silen
             st.error(f"{t(lang, 'ai.followups_failed')}: {e}")
 
 
-def _render_ai_followup(profile: dict[str, Any], q: dict[str, Any], *, step: str, idx: int, lang: str) -> None:
+def _render_ai_followup(
+    profile: dict[str, Any], q: dict[str, Any], *, step: str, idx: int, lang: str
+) -> None:
     path = q.get("target_path")
     if path not in ALL_FIELDS:
         return
@@ -594,15 +711,44 @@ def _render_ai_followup(profile: dict[str, Any], q: dict[str, Any], *, step: str
     widget_key = f"fu__{step}__{idx}__{path}"
 
     if answer_type == "bool":
-        st.checkbox(question, value=bool(get_value(profile, path) or False), key=widget_key, on_change=partial(_on_widget_change, path, "bool", widget_key))
+        st.checkbox(
+            question,
+            value=bool(get_value(profile, path) or False),
+            key=widget_key,
+            on_change=partial(_on_widget_change, path, "bool", widget_key),
+        )
     elif answer_type == "list":
         raw_list = get_value(profile, path)
-        st.text_area(question, value=list_to_multiline(raw_list if isinstance(raw_list, list) else multiline_to_list(str(raw_list or ""))), height=120, key=widget_key, on_change=partial(_on_widget_change, path, "list", widget_key))
-    elif answer_type == "select" and isinstance(q.get("options"), list) and q.get("options"):
+        st.text_area(
+            question,
+            value=list_to_multiline(
+                raw_list
+                if isinstance(raw_list, list)
+                else multiline_to_list(str(raw_list or ""))
+            ),
+            height=120,
+            key=widget_key,
+            on_change=partial(_on_widget_change, path, "list", widget_key),
+        )
+    elif (
+        answer_type == "select"
+        and isinstance(q.get("options"), list)
+        and q.get("options")
+    ):
         opts = [""] + list(q["options"])
-        st.selectbox(question, options=opts, key=widget_key, on_change=partial(_on_widget_change, path, "select", widget_key))
+        st.selectbox(
+            question,
+            options=opts,
+            key=widget_key,
+            on_change=partial(_on_widget_change, path, "select", widget_key),
+        )
     else:
-        st.text_input(question, value=str(get_value(profile, path) or ""), key=widget_key, on_change=partial(_on_widget_change, path, "text", widget_key))
+        st.text_input(
+            question,
+            value=str(get_value(profile, path) or ""),
+            key=widget_key,
+            on_change=partial(_on_widget_change, path, "text", widget_key),
+        )
 
 
 def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
@@ -618,7 +764,9 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
 
     if do_search and query:
         try:
-            results = search_occupations(query, language=("de" if lang == LANG_DE else "en"), limit=10)
+            results = search_occupations(
+                query, language=("de" if lang == LANG_DE else "en"), limit=10
+            )
             st.session_state["esco_results"] = results
         except ESCOError as e:
             st.error(f"{t(lang, 'esco.error')}: {e}")
@@ -627,14 +775,37 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
     results = st.session_state.get("esco_results") or []
     if results:
         labels = [r["label"] for r in results]
-        choice = st.selectbox(t(lang, "ui.esco_pick"), options=list(range(len(labels))), format_func=lambda i: labels[i], key="esco_pick")
+        choice = st.selectbox(
+            t(lang, "ui.esco_pick"),
+            options=list(range(len(labels))),
+            format_func=lambda i: labels[i],
+            key="esco_pick",
+        )
         picked = results[int(choice)]
-        set_field(profile, Keys.ESCO_OCCUPATION_URI, picked["uri"], provenance="user", confidence=1.0, evidence="esco_pick")
-        set_field(profile, Keys.ESCO_OCCUPATION_LABEL, picked["label"], provenance="user", confidence=1.0, evidence="esco_pick")
+        set_field(
+            profile,
+            Keys.ESCO_OCCUPATION_URI,
+            picked["uri"],
+            provenance="user",
+            confidence=1.0,
+            evidence="esco_pick",
+        )
+        set_field(
+            profile,
+            Keys.ESCO_OCCUPATION_LABEL,
+            picked["label"],
+            provenance="user",
+            confidence=1.0,
+            evidence="esco_pick",
+        )
 
         if st.button(t(lang, "ui.esco_apply_skills"), key="esco_apply_btn"):
             try:
-                skills = occupation_related_skills(picked["uri"], language=("de" if lang == LANG_DE else "en"), max_items=25)
+                skills = occupation_related_skills(
+                    picked["uri"],
+                    language=("de" if lang == LANG_DE else "en"),
+                    max_items=25,
+                )
                 st.session_state["esco_skills"] = skills
             except ESCOError as e:
                 st.error(f"{t(lang, 'esco.error')}: {e}")
@@ -642,16 +813,34 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
 
     skills = st.session_state.get("esco_skills") or []
     if skills:
-        selected = st.multiselect(t(lang, "esco.skills_select"), options=skills, default=skills[:8], key="esco_skills_select")
+        selected = st.multiselect(
+            t(lang, "esco.skills_select"),
+            options=skills,
+            default=skills[:8],
+            key="esco_skills_select",
+        )
         if selected:
             existing = get_value(profile, Keys.HARD_OPT) or []
-            existing_list = existing if isinstance(existing, list) else multiline_to_list(str(existing))
+            existing_list = (
+                existing
+                if isinstance(existing, list)
+                else multiline_to_list(str(existing))
+            )
             merged = existing_list + [s for s in selected if s not in existing_list]
-            set_field(profile, Keys.HARD_OPT, merged, provenance="ai_suggestion", confidence=0.65, evidence="esco_skill_merge")
+            set_field(
+                profile,
+                Keys.HARD_OPT,
+                merged,
+                provenance="ai_suggestion",
+                confidence=0.65,
+                evidence="esco_skill_merge",
+            )
             st.success(t(lang, "esco.merge_success"))
 
 
-def _translate_fields_to_english(profile: dict[str, Any], *, api_key: str, model: str, lang: str) -> None:
+def _translate_fields_to_english(
+    profile: dict[str, Any], *, api_key: str, model: str, lang: str
+) -> None:
     if not api_key:
         return
 
@@ -674,13 +863,29 @@ def _translate_fields_to_english(profile: dict[str, Any], *, api_key: str, model
         updates = 0
 
         if isinstance(data, dict):
-            for path in [Keys.POSITION_TITLE_EN, Keys.HARD_REQ_EN, Keys.SOFT_REQ_EN, Keys.TOOLS_EN]:
+            for path in [
+                Keys.POSITION_TITLE_EN,
+                Keys.HARD_REQ_EN,
+                Keys.SOFT_REQ_EN,
+                Keys.TOOLS_EN,
+            ]:
                 val = data.get(path)
                 if val is None:
                     continue
-                if path in {Keys.HARD_REQ_EN, Keys.SOFT_REQ_EN, Keys.TOOLS_EN} and isinstance(val, str):
+                if path in {
+                    Keys.HARD_REQ_EN,
+                    Keys.SOFT_REQ_EN,
+                    Keys.TOOLS_EN,
+                } and isinstance(val, str):
                     val = multiline_to_list(val)
-                set_field(profile, path, val, provenance="ai_suggestion", confidence=0.75, evidence="translation")
+                set_field(
+                    profile,
+                    path,
+                    val,
+                    provenance="ai_suggestion",
+                    confidence=0.75,
+                    evidence="translation",
+                )
                 updates += 1
 
         st.session_state[SS_PROFILE] = profile
@@ -697,7 +902,12 @@ def _render_review(profile: dict[str, Any], *, lang: str) -> None:
     if not st.session_state.get(SS_JOB_AD_DRAFT):
         st.session_state[SS_JOB_AD_DRAFT] = generated_md
 
-    md = st.text_area(t(lang, "review.job_ad"), value=st.session_state[SS_JOB_AD_DRAFT], height=450, key=SS_JOB_AD_DRAFT)
+    md = st.text_area(
+        t(lang, "review.job_ad"),
+        value=st.session_state[SS_JOB_AD_DRAFT],
+        height=450,
+        key=SS_JOB_AD_DRAFT,
+    )
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -738,6 +948,8 @@ def _render_review(profile: dict[str, Any], *, lang: str) -> None:
     if extracted or suggested:
         st.markdown(f"### {t(lang, 'review.provenance_title')}")
         if extracted:
-            st.write(f"{t(lang, 'review.provenance_extracted')}: ", ", ".join(extracted))
+            st.write(
+                f"{t(lang, 'review.provenance_extracted')}: ", ", ".join(extracted)
+            )
         if suggested:
             st.write(f"{t(lang, 'review.provenance_ai')}: ", ", ".join(suggested))

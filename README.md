@@ -1,6 +1,6 @@
 # CognitiveStaffing – Need Analysis Wizard (Streamlit)
 
-A modular Streamlit app for line managers to transform an existing job ad (URL, PDF, DOCX) into a structured **NeedAnalysisProfile** and an exportable job ad draft.
+A modular Streamlit app for line managers to transform an existing job ad (URL, PDF, DOCX, or pasted text) into a structured **NeedAnalysisProfile** and an exportable job ad draft.
 
 ## Quickstart (local)
 
