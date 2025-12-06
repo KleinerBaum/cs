@@ -9,12 +9,11 @@ _URL_RE = re.compile(r"\bhttps?://[^\s)\]]+", re.IGNORECASE)
 _WHITESPACE_RE = re.compile(r"\s+")
 _BULLET_RE = re.compile(r"^\s*([\-\*•]|\d+\.|\d+\))\s+")
 
-
 def normalize_space(text: str) -> str:
     return _WHITESPACE_RE.sub(" ", text or "").strip()
 
-
 def multiline_to_list(raw: str) -> list[str]:
+    """Convert a multiline or bullet-point string into a list of cleaned items."""
     if not raw:
         return []
     items: list[str] = []
@@ -25,7 +24,7 @@ def multiline_to_list(raw: str) -> list[str]:
         line = _BULLET_RE.sub("", line).strip()
         if line:
             items.append(line)
-    # de-dup preserving order
+    # De-duplicate while preserving order (case-insensitive)
     seen = set()
     out: list[str] = []
     for it in items:
@@ -36,31 +35,26 @@ def multiline_to_list(raw: str) -> list[str]:
         out.append(it)
     return out
 
-
 def list_to_multiline(items: Iterable[str] | None) -> str:
     if not items:
         return ""
     return "\n".join(str(x).strip() for x in items if str(x).strip())
-
 
 def extract_emails(text: str) -> list[str]:
     if not text:
         return []
     return sorted(set(_EMAIL_RE.findall(text)))
 
-
 def extract_urls(text: str) -> list[str]:
     if not text:
         return []
     return sorted(set(_URL_RE.findall(text)))
-
 
 def looks_like_url(url: str) -> bool:
     if not url:
         return False
     url = url.strip()
     return bool(re.match(r"^https?://", url, re.IGNORECASE))
-
 
 def clamp_str(text: str, max_chars: int) -> str:
     if text is None:
