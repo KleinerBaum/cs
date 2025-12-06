@@ -10,7 +10,6 @@ from .keys import Keys
 from .profile import get_value, is_missing
 from .utils import multiline_to_list, normalize_space
 
-
 def _as_list(value: Any) -> list[str]:
     if value is None:
         return []
@@ -20,7 +19,6 @@ def _as_list(value: Any) -> list[str]:
         return multiline_to_list(value)
     return [str(value).strip()] if str(value).strip() else []
 
-
 def _title_for_lang(profile: dict, lang: str) -> str:
     if lang != LANG_DE:
         v = get_value(profile, Keys.POSITION_TITLE_EN)
@@ -29,18 +27,16 @@ def _title_for_lang(profile: dict, lang: str) -> str:
     v = get_value(profile, Keys.POSITION_TITLE) or ""
     return str(v).strip()
 
-
-def _list_for_lang(
-    profile: dict, lang: str, preferred_path: str, fallback_path: str
-) -> list[str]:
+def _list_for_lang(profile: dict, lang: str, preferred_path: str, fallback_path: str) -> list[str]:
+    """Get list field, using English version if lang is EN and available."""
     if lang != LANG_DE:
         v = get_value(profile, preferred_path)
         if v is not None and not is_missing(profile, preferred_path):
             return _as_list(v)
     return _as_list(get_value(profile, fallback_path))
 
-
 def render_job_ad_markdown(profile: dict, lang: str) -> str:
+    """Generate a job ad draft in Markdown format based on the profile, in the given language."""
     company = str(get_value(profile, Keys.COMPANY_NAME) or "").strip()
     website = str(get_value(profile, Keys.COMPANY_WEBSITE) or "").strip()
     industry = str(get_value(profile, Keys.COMPANY_INDUSTRY) or "").strip()
@@ -54,21 +50,15 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
     role_summary = str(get_value(profile, Keys.POSITION_SUMMARY) or "").strip()
 
     work_policy = get_value(profile, Keys.LOCATION_WORK_POLICY)
-    work_policy_lbl = (
-        option_label(lang, "work_policy", str(work_policy)) if work_policy else ""
-    )
+    work_policy_lbl = option_label(lang, "work_policy", str(work_policy)) if work_policy else ""
     city = str(get_value(profile, Keys.LOCATION_CITY) or "").strip()
     remote_scope = str(get_value(profile, Keys.LOCATION_REMOTE_SCOPE) or "").strip()
     tz = str(get_value(profile, Keys.LOCATION_TZ) or "").strip()
 
     emp_type = get_value(profile, Keys.EMPLOYMENT_TYPE)
-    emp_type_lbl = (
-        option_label(lang, "employment_type", str(emp_type)) if emp_type else ""
-    )
+    emp_type_lbl = option_label(lang, "employment_type", str(emp_type)) if emp_type else ""
     contract = get_value(profile, Keys.EMPLOYMENT_CONTRACT)
-    contract_lbl = (
-        option_label(lang, "contract_type", str(contract)) if contract else ""
-    )
+    contract_lbl = option_label(lang, "contract_type", str(contract)) if contract else ""
     start_date = str(get_value(profile, Keys.EMPLOYMENT_START) or "").strip()
 
     salary_provided = bool(get_value(profile, Keys.SALARY_PROVIDED))
@@ -96,6 +86,7 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
         or str(get_value(profile, Keys.COMPANY_CONTACT_EMAIL) or "").strip()
     )
 
+    # Section headings and static text per language
     if lang == LANG_DE:
         h_company = "Über das Unternehmen"
         h_role = "Die Rolle"
@@ -115,12 +106,14 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
         h_apply = "How to apply"
         apply_line = f"Please send your application to: {contact}" if contact else ""
 
+    # Build the Markdown content
     md: list[str] = []
     md.append(f"# {title}".strip())
     if seniority_lbl:
         md.append(f"**{seniority_lbl}**")
     md.append("")
 
+    # Company section
     if company:
         md.append(f"## {h_company}")
         if company_desc:
@@ -141,6 +134,7 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
             md.append(f"- {website}")
         md.append("")
 
+    # Role/position section
     md.append(f"## {h_role}")
     facts: list[str] = []
     if city:
@@ -167,102 +161,95 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
             salary_line += f" / {period_lbl}"
         md.append(salary_line)
     if role_summary:
-        md.append("")
-        md.append(role_summary)
+        md.append(normalize_space(role_summary))
     md.append("")
 
+    # Tasks/Responsibilities section
     md.append(f"## {h_tasks}")
-    md.extend(_bullets(resp_items, empty_fallback="(TBD)"))
+    for item in (resp_items or []):
+        md.append(f"- {item}")
+    if not resp_items:
+        md.append("-")
     md.append("")
 
+    # Requirements (skills) section
     md.append(f"## {h_req}")
     if hard:
-        md.append("**Hard skills**")
-        md.extend(_bullets(hard))
+        md.append("**Must-have skills:**")
+        for skill in hard:
+            md.append(f"- {skill}")
     if hard_opt:
-        md.append("")
-        md.append("**Nice-to-haves**")
-        md.extend(_bullets(hard_opt))
+        md.append("**Optional skills:**")
+        for skill in hard_opt:
+            md.append(f"- {skill}")
     if soft:
-        md.append("")
-        md.append("**Soft skills**")
-        md.extend(_bullets(soft))
+        md.append("**Soft skills:**")
+        for skill in soft:
+            md.append(f"- {skill}")
     if languages:
-        md.append("")
-        md.append("**Languages**")
-        md.extend(_bullets(languages))
+        md.append("**Languages:** " + ", ".join(languages))
     if tools:
-        md.append("")
-        md.append("**Tools / technologies**")
-        md.extend(_bullets(tools))
+        md.append("**Tools & technologies:** " + ", ".join(tools))
     if must_not:
-        md.append("")
-        md.append("**Must-not-haves**")
-        md.extend(_bullets(must_not))
+        md.append("**Must-not haves:** " + ", ".join(must_not))
     md.append("")
 
+    # Benefits section
     md.append(f"## {h_benefits}")
-    md.extend(_bullets(benefits, empty_fallback="(TBD)"))
+    for b in (benefits or []):
+        md.append(f"- {b}")
+    if not benefits:
+        md.append("-")
     md.append("")
 
-    if stages or timeline or instructions or contact:
-        md.append(f"## {h_process}")
-        if stages:
-            md.append("**Stages**")
-            md.extend(_bullets(stages))
-        if timeline:
-            md.append(f"- Timeline: {timeline}")
-        if instructions:
-            md.append(
-                "\n" + instructions
-                if not instructions.startswith("-")
-                else instructions
-            )
-        md.append("")
+    # Recruiting process section
+    md.append(f"## {h_process}")
+    for stage in (stages or []):
+        md.append(f"- {stage}")
+    if timeline:
+        md.append(f"*{timeline}*")
+    if instructions:
+        md.append(normalize_space(instructions))
+    md.append("")
 
+    # Application / contact section
+    md.append(f"## {h_apply}")
     if apply_line:
-        md.append(f"## {h_apply}")
         md.append(apply_line)
+    else:
+        md.append(contact or "-")
 
-    return "\n".join(
-        [
-            normalize_space(line)
-            if line and not line.startswith("-") and not line.startswith("#")
-            else line
-            for line in md
-        ]
-    ).strip()
+    return "\n".join(md)
 
-
-def _bullets(items: Iterable[str], empty_fallback: str | None = None) -> list[str]:
-    clean = [normalize_space(x) for x in items if normalize_space(x)]
-    if not clean and empty_fallback:
-        return [f"- {empty_fallback}"]
-    return [f"- {x}" for x in clean]
-
-
-def export_docx_bytes(
-    profile: dict, lang: str, markdown_override: str | None = None
-) -> bytes:
-    """Create a basic DOCX export (editable)."""
+def export_docx_bytes(profile: dict, lang: str, markdown_override: str | None = None) -> bytes:
+    """Generate a DOCX (Word) binary from the job ad content. Uses the markdown_override if provided."""
+    md_text = markdown_override if isinstance(markdown_override, str) else render_job_ad_markdown(profile, lang)
+    lines = md_text.splitlines()
     doc = Document()
-
-    md = markdown_override or render_job_ad_markdown(profile, lang)
-    for line in md.splitlines():
-        raw = line.rstrip()
-        if not raw:
+    for line in lines:
+        text = line.strip()
+        if not text:
+            # Blank line indicates new paragraph
+            doc.add_paragraph("")
             continue
-        if raw.startswith("# "):
-            doc.add_heading(raw[2:].strip(), level=1)
-        elif raw.startswith("## "):
-            doc.add_heading(raw[3:].strip(), level=2)
-        elif raw.startswith("- "):
-            doc.add_paragraph(raw[2:].strip(), style="List Bullet")
-        elif raw.startswith("**") and raw.endswith("**") and len(raw) > 4:
-            doc.add_paragraph(raw.strip("*"))
+        if text.startswith("#"):
+            # Markdown heading: # -> H1, ## -> H2, etc.
+            level = len(text) - len(text.lstrip("#"))
+            heading_text = text.lstrip("#").strip()
+            if level == 1:
+                doc.add_heading(heading_text, level=0)
+            else:
+                doc.add_heading(heading_text, level=min(level, 4))
+        elif text.startswith("**") and text.endswith("**") and len(text) > 4:
+            # Bold standalone text (e.g., seniority label line)
+            doc.add_paragraph(text.strip("*"), style="Intense Quote")
+        elif text.startswith("- "):
+            # Bullet list item
+            doc.add_paragraph(text[2:], style="List Bullet")
         else:
-            doc.add_paragraph(raw)
-
+            # Regular paragraph text
+            doc.add_paragraph(text)
+    # Save to bytes
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
