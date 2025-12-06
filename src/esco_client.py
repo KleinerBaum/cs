@@ -7,10 +7,9 @@ import requests
 
 from .settings import ESCO_BASE_URL, REQUEST_TIMEOUT_S, USER_AGENT
 
-
 class ESCOError(RuntimeError):
+    """Exception for ESCO API errors."""
     pass
-
 
 def _headers(language: str | None) -> dict[str, str]:
     h = {"User-Agent": USER_AGENT, "Accept": "application/json"}
@@ -18,10 +17,7 @@ def _headers(language: str | None) -> dict[str, str]:
         h["Accept-Language"] = language
     return h
 
-
-def _get(
-    url: str, params: dict[str, Any] | None = None, language: str | None = None
-) -> dict[str, Any]:
+def _get(url: str, params: dict[str, Any] | None = None, language: str | None = None) -> dict[str, Any]:
     try:
         resp = requests.get(
             url,
@@ -34,18 +30,17 @@ def _get(
     except Exception as e:
         raise ESCOError(str(e)) from e
 
-
 def _pick_label(item: dict[str, Any]) -> str | None:
     for key in ("preferredLabel", "title", "label", "name"):
         v = item.get(key)
         if isinstance(v, str) and v.strip():
             return v.strip()
         if isinstance(v, dict):
+            # Some labels might be nested by language code
             for vv in v.values():
                 if isinstance(vv, str) and vv.strip():
                     return vv.strip()
     return None
-
 
 def _pick_uri(item: dict[str, Any]) -> str | None:
     v = item.get("uri")
@@ -58,34 +53,28 @@ def _pick_uri(item: dict[str, Any]) -> str | None:
         return href.strip()
     return None
 
-
 def _extract_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract the list of result items from an ESCO API response (including HAL payloads)."""
     if not isinstance(payload, dict):
         return []
     if isinstance(payload.get("results"), list):
         return payload["results"]
     emb = payload.get("_embedded") or {}
     for key in (
-        "results",
-        "result",
-        "occupations",
-        "occupation",
-        "skills",
-        "skill",
-        "concepts",
-        "concept",
+        "results", "result", 
+        "occupations", "occupation", 
+        "skills", "skill", 
+        "concepts", "concept",
     ):
         if isinstance(emb.get(key), list):
             return emb[key]
+    # As fallback, return the first list we find in _embedded
     for v in emb.values():
         if isinstance(v, list) and v and isinstance(v[0], dict):
             return v
     return []
 
-
-def search_occupations(
-    query: str, language: str = "en", limit: int = 10, offset: int = 0
-) -> list[dict[str, str]]:
+def search_occupations(query: str, language: str = "en", limit: int = 10, offset: int = 0) -> list[dict[str, str]]:
     url = f"{ESCO_BASE_URL}/search"
     params = {
         "text": query,
@@ -106,10 +95,7 @@ def search_occupations(
             out.append({"label": label, "uri": uri})
     return out
 
-
-def search_skills(
-    query: str, language: str = "en", limit: int = 15, offset: int = 0
-) -> list[dict[str, str]]:
+def search_skills(query: str, language: str = "en", limit: int = 15, offset: int = 0) -> list[dict[str, str]]:
     url = f"{ESCO_BASE_URL}/search"
     params = {
         "text": query,
@@ -130,27 +116,20 @@ def search_skills(
             out.append({"label": label, "uri": uri})
     return out
 
-
 def get_occupation(uri: str, language: str = "en") -> dict[str, Any]:
     url = f"{ESCO_BASE_URL}/resource/occupation"
     return _get(url, params={"uri": uri, "language": language}, language=language)
 
-
-def _fetch_hal_collection(
-    href: str, language: str = "en", limit: int = 50
-) -> list[dict[str, Any]]:
+def _fetch_hal_collection(href: str, language: str = "en", limit: int = 50) -> list[dict[str, Any]]:
     if href.startswith("/"):
         href = ESCO_BASE_URL.rstrip("/") + href
     data = _get(href, params={"limit": limit}, language=language)
     return _extract_results(data)
 
-
-def occupation_related_skills(
-    occupation_uri: str, language: str = "en", max_items: int = 25
-) -> list[str]:
+def occupation_related_skills(occupation_uri: str, language: str = "en", max_items: int = 25) -> list[str]:
     occ = get_occupation(occupation_uri, language=language)
     skills: list[str] = []
-
+    # Check embedded results for skills
     emb = occ.get("_embedded") or {}
     for key, value in emb.items():
         if "skill" in str(key).lower() and isinstance(value, list):
@@ -159,7 +138,7 @@ def occupation_related_skills(
                     label = _pick_label(it)
                     if label:
                         skills.append(label)
-
+    # If there are paginated skill links, fetch them
     links = occ.get("_links") or {}
     for key, meta in links.items():
         if "skill" not in str(key).lower():
@@ -178,7 +157,7 @@ def occupation_related_skills(
                             skills.append(label)
             except ESCOError:
                 continue
-
+    # Remove duplicates (case-insensitive) and limit the list
     seen = set()
     uniq: list[str] = []
     for s in skills:
@@ -190,7 +169,6 @@ def occupation_related_skills(
         if len(uniq) >= max_items:
             break
     return uniq
-
 
 def encode_uri(uri: str) -> str:
     return urllib.parse.quote(uri, safe="")
