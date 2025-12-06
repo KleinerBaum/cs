@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from typing import Any
 
 LANG_DE = "de"
@@ -55,9 +54,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ui.translate_failed": "Übersetzung fehlgeschlagen",
         "ui.translate_hint": "EN-Felder werden genutzt, wenn du UI/Output auf Englisch stellst.",
         "ui.ai_hint": "AI-Follow-ups erscheinen nur bei Lücken/Unsicherheiten und bleiben optional.",
-        "ui.ai_followups_title": "AI follow-ups",
-        "ai.followups_done": "AI follow-ups erstellt",
-        "ai.followups_failed": "AI follow-ups fehlgeschlagen",
+        "ui.ai_followups_title": "AI-Follow-ups",
+        "ai.followups_done": "AI-Follow-ups erstellt",
+        "ai.followups_failed": "AI-Follow-ups fehlgeschlagen",
         "ui.esco_search": "ESCO: Suche",
         "ui.esco_pick": "ESCO: Treffer auswählen",
         "ui.esco_apply_skills": "ESCO-Skills übernehmen",
@@ -81,7 +80,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "review.edit_hint": "Du kannst den Entwurf unten bearbeiten, bevor du exportierst.",
         "review.provenance_title": "Provenance",
         "review.provenance_extracted": "Extracted",
-        "review.provenance_ai": "AI suggestions",
+        "review.provenance_ai": "AI-Vorschläge",
         "provenance.user": "User",
         "provenance.extracted": "Extracted",
         "provenance.ai_suggestion": "AI suggestion",
@@ -127,30 +126,30 @@ _STRINGS: dict[str, dict[str, str]] = {
         "step.skills": "Skills",
         "step.benefits": "Benefits",
         "step.process": "Recruiting process",
-        "step.review": "Review & export",
+        "step.review": "Review & Export",
         "ui.more_details": "More details (optional)",
-        "ui.ai_suggest": "AI: generate suggestions",
-        "ui.translate_to_en": "AI: Generate English variants",
+        "ui.ai_suggest": "AI: Generate suggestions",
+        "ui.translate_to_en": "AI: Generate English versions",
         "ui.translate_done": "English fields updated",
         "ui.translate_failed": "Translation failed",
-        "ui.translate_hint": "EN fields are used when you switch the UI/output to English.",
-        "ui.ai_hint": "AI follow-ups only appear for gaps/uncertainties and remain optional.",
+        "ui.translate_hint": "EN fields will be used if you switch the UI/output to English.",
+        "ui.ai_hint": "AI follow-ups appear only for gaps/uncertainties and are optional.",
         "ui.ai_followups_title": "AI follow-ups",
-        "ai.followups_done": "AI follow-ups generated",
+        "ai.followups_done": "AI follow-ups created",
         "ai.followups_failed": "AI follow-ups failed",
-        "ui.esco_search": "ESCO: search",
-        "ui.esco_pick": "ESCO: select result",
+        "ui.esco_search": "ESCO: Search",
+        "ui.esco_pick": "ESCO: Select an occupation",
         "ui.esco_apply_skills": "Apply ESCO skills",
-        "ui.esco_insert_hard": "Insert into hard skills",
+        "ui.esco_insert_hard": "Insert into Hard Skills",
         "ui.empty": "—",
         "esco.title": "ESCO",
-        "esco.query": "ESCO query",
+        "esco.query": "ESCO search query",
         "esco.skills_select": "Skills (select to add)",
         "esco.caption": "ESCO provides standardized occupations/skills (EU).",
-        "esco.lang_hint": "Searching in {0}",
-        "esco.apply_hint": "Selection will populate the required hard skills.",
-        "esco.apply_success": "ESCO skills were added to required hard skills.",
-        "esco.merge_success": "Skills were added to 'Hard skills optional'.",
+        "esco.lang_hint": "Querying in {0}",
+        "esco.apply_hint": "Selected skills will be added to required hard skills.",
+        "esco.apply_success": "ESCO skills inserted into required hard skills.",
+        "esco.merge_success": "Skills added to 'Hard Skills optional'.",
         "esco.error": "ESCO error",
         "review.title": "Result",
         "review.profile_json": "Profile JSON (NeedAnalysisProfile)",
@@ -169,72 +168,47 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
 }
 
-_OPTION_LABELS: dict[str, dict[str, dict[str, str]]] = {
-    "work_policy": {
-        LANG_DE: {"onsite": "Vor Ort", "hybrid": "Hybrid", "remote": "Remote"},
-        LANG_EN: {"onsite": "On-site", "hybrid": "Hybrid", "remote": "Remote"},
-    },
-    "employment_type": {
-        LANG_DE: {
-            "full_time": "Vollzeit",
-            "part_time": "Teilzeit",
-            "contractor": "Freelance/Contractor",
-            "intern": "Praktikum",
-        },
-        LANG_EN: {
-            "full_time": "Full-time",
-            "part_time": "Part-time",
-            "contractor": "Contractor",
-            "intern": "Internship",
-        },
-    },
-    "contract_type": {
-        LANG_DE: {"permanent": "Unbefristet", "fixed_term": "Befristet"},
-        LANG_EN: {"permanent": "Permanent", "fixed_term": "Fixed-term"},
-    },
-    "seniority": {
-        LANG_DE: {
-            "junior": "Junior",
-            "mid": "Mid-level",
-            "senior": "Senior",
-            "lead": "Lead",
-            "head": "Head",
-            "c_level": "C-Level",
-        },
-        LANG_EN: {
-            "junior": "Junior",
-            "mid": "Mid-level",
-            "senior": "Senior",
-            "lead": "Lead",
-            "head": "Head",
-            "c_level": "C-level",
-        },
-    },
-    "salary_period": {
-        LANG_DE: {"year": "Jahr", "month": "Monat", "hour": "Stunde"},
-        LANG_EN: {"year": "Year", "month": "Month", "hour": "Hour"},
-    },
-}
+def t(lang: str, key: str, *fmt_args: Any) -> str:
+    """Translate a given key into the selected language, formatting if needed."""
+    lang_map = _STRINGS.get(lang)
+    text = (lang_map.get(key) if lang_map else None) or _STRINGS[LANG_EN].get(key, str(key))
+    return text if not fmt_args else text.format(*fmt_args)
 
-
-def t(lang: str, key: str, default: str | None = None) -> str:
-    if lang not in _STRINGS:
-        lang = LANG_EN
-    return _STRINGS.get(lang, {}).get(key, default or key)
-
+def as_lang(lang_raw: str) -> str:
+    """Return a supported language code ('de' or 'en'), defaulting to 'de'."""
+    return lang_raw if lang_raw in SUPPORTED_LANGS else LANG_DE
 
 def option_label(lang: str, group: str, value: str) -> str:
-    if lang not in SUPPORTED_LANGS:
-        lang = LANG_EN
-    return _OPTION_LABELS.get(group, {}).get(lang, {}).get(value, value)
-
-
-def options_for(lang: str, group: str) -> list[tuple[str, str]]:
-    if lang not in SUPPORTED_LANGS:
-        lang = LANG_EN
-    mapping = _OPTION_LABELS.get(group, {}).get(lang, {})
-    return list(mapping.items())
-
-
-def as_lang(lang: Any) -> str:
-    return lang if lang in SUPPORTED_LANGS else LANG_EN
+    """Friendly label for enumerated option values, based on language."""
+    # Map stable values to display labels
+    mapping = {
+        "work_policy": {
+            "onsite": {"de": "Onsite", "en": "Onsite"},
+            "hybrid": {"de": "Hybrid", "en": "Hybrid"},
+            "remote": {"de": "Remote", "en": "Remote"},
+        },
+        "employment_type": {
+            "full_time": {"de": "Vollzeit", "en": "Full-time"},
+            "part_time": {"de": "Teilzeit", "en": "Part-time"},
+            "contractor": {"de": "Freelance", "en": "Contractor"},
+            "intern": {"de": "Praktikum", "en": "Internship"},
+        },
+        "contract_type": {
+            "permanent": {"de": "Unbefristet", "en": "Permanent"},
+            "fixed_term": {"de": "Befristet", "en": "Fixed-term"},
+        },
+        "seniority": {
+            "junior": {"de": "Junior", "en": "Junior"},
+            "mid": {"de": "Mid-Level", "en": "Mid-Level"},
+            "senior": {"de": "Senior", "en": "Senior"},
+            "lead": {"de": "Lead", "en": "Lead"},
+            "head": {"de": "Head of ...", "en": "Head of ..."},
+            "c_level": {"de": "C-Level", "en": "C-Level"},
+        },
+        "salary_period": {
+            "year": {"de": "Jahr", "en": "year"},
+            "month": {"de": "Monat", "en": "month"},
+            "hour": {"de": "Stunde", "en": "hour"},
+        },
+    }
+    return mapping.get(group, {}).get(str(value), {}).get(lang, str(value))
