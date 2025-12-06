@@ -8,6 +8,11 @@ The home page now provides a bilingual, multi-step wizard to collect all require
 
 The sidebar lets you switch between German and English labels, pick a light/dark theme, and toggle optional ESCO assistance for skills. All UI texts and generated job-ad exports follow the selected language.
 
+### Branding & layout
+
+- The main canvas uses `images/AdobeStock_506577005.jpeg` as a full-bleed background with a soft gradient overlay so the wizard steps remain legible.
+- A fixed, pulsating logo (`images/animation_pulse_Default_7kigl22lw.gif`) sits in the top-right corner to keep the brand in view across all steps without obstructing the form content.
+
 ### ESCO skill suggestions
 
 - ESCO calls now auto-detect whether the query/title looks German or English and query the ESCO API in that language for better hits.
