@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import partial
-from typing import Any
+from typing import Any, cast
 
 import streamlit as st
 
@@ -58,13 +59,16 @@ from .utils import (
 SS_PROFILE = "profile"
 SS_STEP = "step"
 SS_SOURCE_DOC = "source_doc"
-SS_OPENAI_KEY = "openai_api_key"
 SS_MODEL = "openai_model"
 SS_USE_ESCO = "use_esco"
 SS_AUTO_AI = "auto_ai_followups"
 SS_AI_FOLLOWUPS = "ai_followups"
 SS_TRANSLATED = "translated_once"
 SS_JOB_AD_DRAFT = "job_ad_draft"
+SS_THEME = "ui_theme"
+
+THEME_LIGHT = "light"
+THEME_DARK = "dark"
 
 
 _STEP_LABEL_KEYS = {
@@ -99,6 +103,8 @@ def _init_state() -> None:
         st.session_state[SS_TRANSLATED] = False
     if SS_JOB_AD_DRAFT not in st.session_state:
         st.session_state[SS_JOB_AD_DRAFT] = ""
+    if SS_THEME not in st.session_state:
+        st.session_state[SS_THEME] = THEME_LIGHT
 
 
 def _reset_session() -> None:
@@ -106,13 +112,13 @@ def _reset_session() -> None:
         SS_PROFILE,
         SS_STEP,
         SS_SOURCE_DOC,
-        SS_OPENAI_KEY,
         SS_MODEL,
         SS_USE_ESCO,
         SS_AUTO_AI,
         SS_AI_FOLLOWUPS,
         SS_TRANSLATED,
         SS_JOB_AD_DRAFT,
+        SS_THEME,
     ]:
         st.session_state.pop(k, None)
     st.rerun()
@@ -120,6 +126,24 @@ def _reset_session() -> None:
 
 def _get_lang() -> str:
     return as_lang(st.session_state.get("ui_lang", LANG_DE))
+
+
+def _resolve_api_key() -> str | None:
+    """Return the configured OpenAI API key without exposing it in the UI."""
+
+    try:
+        secret_key = st.secrets.get("OPENAI_API_KEY")  # type: ignore[attr-defined]
+    except Exception:
+        secret_key = None
+
+    if secret_key:
+        return str(secret_key)
+
+    env_key = os.getenv("OPENAI_API_KEY")
+    if env_key:
+        return env_key
+
+    return None
 
 
 def _set_step(step: str) -> None:
@@ -146,12 +170,79 @@ def _go_prev() -> None:
         st.session_state[SS_STEP] = STEPS[idx - 1]
 
 
+def _apply_theme(theme: str) -> None:
+    css_light = """
+    :root {
+        --cs-bg: #ffffff;
+        --cs-text: #111827;
+        --cs-surface: #f8fafc;
+        --cs-primary: #2563eb;
+    }
+    body {
+        background-color: var(--cs-bg);
+        color: var(--cs-text);
+    }
+    .stApp {
+        background: var(--cs-bg);
+    }
+    .stSidebar, .sidebar-content {
+        background: var(--cs-surface);
+    }
+    .stButton>button {
+        color: #ffffff;
+        background: var(--cs-primary);
+        border-color: var(--cs-primary);
+    }
+    """
+
+    css_dark = """
+    :root {
+        --cs-bg: #111827;
+        --cs-text: #e5e7eb;
+        --cs-surface: #1f2937;
+        --cs-primary: #60a5fa;
+    }
+    body {
+        background-color: var(--cs-bg);
+        color: var(--cs-text);
+    }
+    .stApp {
+        background: var(--cs-bg);
+    }
+    .stSidebar, .sidebar-content {
+        background: var(--cs-surface);
+    }
+    .stMarkdown, .stText, .stCaption, label, p, h1, h2, h3, h4, h5, h6 {
+        color: var(--cs-text);
+    }
+    .stButton>button {
+        color: #0b1021;
+        background: var(--cs-primary);
+        border-color: var(--cs-primary);
+    }
+    textarea, input, select {
+        background: #111827;
+        color: #e5e7eb;
+        border-color: #374151;
+    }
+    """
+
+    css = css_dark if theme == THEME_DARK else css_light
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
 def run_app() -> None:
-    st.set_page_config(page_title=APP_NAME, layout="wide")
+    st.set_page_config(page_title="Need Analysis Wizard", page_icon="🧭", layout="wide")
     _init_state()
 
     lang = _get_lang()
     profile: dict[str, Any] = st.session_state[SS_PROFILE]
+
+    api_key = _resolve_api_key()
+    if not api_key:
+        st.error(t(lang, "errors.no_api_key"))
+        st.stop()
+    api_key = cast(str, api_key)
 
     with st.sidebar:
         st.markdown(f"### {t(lang, 'sidebar.title')}")
@@ -163,18 +254,11 @@ def run_app() -> None:
         )
         profile.get("meta", {})["ui_language"] = ui_lang
 
-        secret_key = None
-        try:
-            secret_key = st.secrets.get("OPENAI_API_KEY")  # type: ignore[attr-defined]
-        except Exception:
-            secret_key = None
-
-        api_key_default = st.session_state.get(SS_OPENAI_KEY) or secret_key or ""
-        api_key = st.text_input(
-            t(lang, "sidebar.openai_key"),
-            type="password",
-            value=api_key_default,
-            key=SS_OPENAI_KEY,
+        st.session_state[SS_THEME] = st.selectbox(
+            t(lang, "sidebar.theme"),
+            options=[THEME_LIGHT, THEME_DARK],
+            format_func=lambda x: t(lang, f"theme.{x}"),
+            key=SS_THEME,
         )
 
         model = st.text_input(
@@ -189,6 +273,8 @@ def run_app() -> None:
 
         if st.button(t(lang, "sidebar.reset")):
             _reset_session()
+
+    _apply_theme(st.session_state.get(SS_THEME, THEME_LIGHT))
 
     st.title(APP_NAME)
     st.caption(t(lang, "app.tagline"))
