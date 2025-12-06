@@ -142,12 +142,20 @@ def _resolve_api_key() -> str | None:
     """Return the configured OpenAI API key without exposing it in the UI."""
 
     try:
-        secret_key = st.secrets.get("OPENAI_API_KEY")  # type: ignore[attr-defined]
+        raw_secrets = st.secrets  # type: ignore[attr-defined]
     except Exception:
-        secret_key = None
+        raw_secrets = None
 
-    if secret_key:
-        return str(secret_key)
+    if raw_secrets:
+        direct_secret = raw_secrets.get("OPENAI_API_KEY")
+        if direct_secret:
+            return str(direct_secret)
+
+        general_secret = raw_secrets.get("general", {})
+        if isinstance(general_secret, dict):
+            nested_secret = general_secret.get("OPENAI_API_KEY")
+            if nested_secret:
+                return str(nested_secret)
 
     env_key = os.getenv("OPENAI_API_KEY")
     if env_key:
