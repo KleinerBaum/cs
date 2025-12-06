@@ -3,7 +3,6 @@ from __future__ import annotations
 # Central place for ALL dot-path keys.
 # Any UI label, prompt, rule, or export must reference these constants.
 
-
 class Keys:
     # --- Company
     COMPANY_NAME = "company.name"  # required
@@ -17,7 +16,7 @@ class Keys:
 
     # --- Position / Team
     POSITION_TITLE = "position.job_title"  # required
-    POSITION_TITLE_EN = "position.job_title_en"  # optional (requested)
+    POSITION_TITLE_EN = "position.job_title_en"  # optional (English version)
     POSITION_FAMILY = "position.job_family"
     POSITION_SENIORITY = "position.seniority_level"  # required
     POSITION_SUMMARY = "position.role_summary"
@@ -56,13 +55,13 @@ class Keys:
     # --- Responsibilities / Requirements
     RESPONSIBILITIES = "responsibilities.items"  # required
     HARD_REQ = "requirements.hard_skills_required"  # required
-    HARD_REQ_EN = "requirements.hard_skills_required_en"  # optional (requested)
+    HARD_REQ_EN = "requirements.hard_skills_required_en"  # optional (English version)
     HARD_OPT = "requirements.hard_skills_optional"
     SOFT_REQ = "requirements.soft_skills_required"  # required
-    SOFT_REQ_EN = "requirements.soft_skills_required_en"  # optional (requested)
+    SOFT_REQ_EN = "requirements.soft_skills_required_en"  # optional (English version)
     LANG_REQ = "requirements.languages_required"  # required
     TOOLS = "requirements.tools_and_technologies"  # required
-    TOOLS_EN = "requirements.tools_and_technologies_en"  # optional (requested)
+    TOOLS_EN = "requirements.tools_and_technologies_en"  # optional (English version)
     MUST_NOT = "requirements.must_not_haves"
 
     # --- Recruiting process
@@ -77,7 +76,7 @@ class Keys:
     ESCO_SUGGESTED_SKILLS = "position.esco_suggested_skills"
 
 
-# Required fields as specified by you
+# Required fields (Pflichtfelder)
 REQUIRED_FIELDS: set[str] = {
     Keys.COMPANY_NAME,
     Keys.COMPANY_CONTACT_EMAIL,
@@ -97,8 +96,7 @@ REQUIRED_FIELDS: set[str] = {
 
 # All known fields (including optional enrichment)
 ALL_FIELDS: set[str] = {
-    value
-    for name, value in Keys.__dict__.items()
+    value for name, value in Keys.__dict__.items()
     if name.isupper() and isinstance(value, str)
 }
 
@@ -108,5 +106,4 @@ EMPLOYMENT_TYPE_VALUES = ("full_time", "part_time", "contractor", "intern")
 CONTRACT_TYPE_VALUES = ("permanent", "fixed_term")
 SENIORITY_VALUES = ("junior", "mid", "senior", "lead", "head", "c_level")
 SALARY_PERIOD_VALUES = ("year", "month", "hour")
-
 COMMON_CURRENCIES = ("EUR", "USD", "GBP", "CHF")
