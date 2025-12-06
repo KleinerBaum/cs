@@ -8,6 +8,11 @@ The home page now provides a bilingual, multi-step wizard to collect all require
 
 The sidebar lets you switch between German and English labels, pick a light/dark theme, and toggle optional ESCO assistance for skills. All UI texts and generated job-ad exports follow the selected language.
 
+### ESCO skill suggestions
+
+- ESCO calls now auto-detect whether the query/title looks German or English and query the ESCO API in that language for better hits.
+- Retrieved ESCO skills can be staged via a dedicated button and are safely injected into the required hard-skills list without Streamlit widget key conflicts.
+
 ## Configuration
 
 Set the OpenAI API key via Streamlit secrets (e.g., `.streamlit/secrets.toml`) or the `OPENAI_API_KEY` environment variable. The UI no longer exposes a text field for the key; the app will stop early with a clear error if the key is missing.
