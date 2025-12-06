@@ -1,343 +1,650 @@
-# app.py - Streamlit application
-import streamlit as st
+# app.py - Streamlit job description wizard
+from __future__ import annotations
+
+import os
+import time
+
 import openai
+import streamlit as st
+
 from esco_utils import fetch_essential_skills
+from src.keys import Keys, REQUIRED_FIELDS
 
-st.set_page_config(
-    page_title="Job Description Generator", page_icon="📝", layout="wide"
-)
 
-st.title("Job Description Generator")
-st.markdown(
-    "Dieses Streamlit-Tool generiert eine Stellenanzeige basierend auf strukturierten Eingaben. "
-    "Es nutzt die OpenAI Chat API ([GPT-5-mini Modell](https://platform.openai.com/docs/models/gpt-5-mini)) für die Textgenerierung und die ESCO-API für Skill-Vorschläge."
-)
+MODEL_NAME = "gpt-4o-mini"
 
-# OpenAI API key input (from secrets or user input)
-api_key = st.secrets.get("OPENAI_API_KEY", None) if hasattr(st, "secrets") else None
-if not api_key:
-    api_key = st.sidebar.text_input("OpenAI API-Key eingeben", type="password")
-if api_key:
-    openai.api_key = api_key
+STEP_ORDER: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
+REVIEW_STEP = STEP_ORDER[-1]
 
-# LLM model to use
-MODEL_NAME = (
-    "gpt-3.5-turbo"  # Standardmodell (GPT-5-mini alias gemäß OpenAI-Dokumentation)
-)
+STEP_REQUIRED_FIELDS: dict[int, tuple[str, ...]] = {
+    1: (Keys.COMPANY_NAME, Keys.COMPANY_CONTACT_EMAIL),
+    2: (Keys.POSITION_TITLE, Keys.POSITION_SENIORITY),
+    3: (
+        Keys.LOCATION_CITY,
+        Keys.EMPLOYMENT_TYPE,
+        Keys.EMPLOYMENT_CONTRACT,
+        Keys.EMPLOYMENT_START,
+    ),
+    4: (Keys.BENEFITS_ITEMS,),
+    5: (
+        Keys.RESPONSIBILITIES,
+        Keys.HARD_REQ,
+        Keys.SOFT_REQ,
+        Keys.LANG_REQ,
+        Keys.TOOLS,
+    ),
+    6: (),
+}
 
-# --- Company section ---
-st.header("Unternehmen")
-company_name = st.text_input("Firmenname (Pflicht)", key="company_name")
-company_website = st.text_input("Webseite", key="company_website")
-company_industry = st.text_input("Branche", key="company_industry")
-company_size = st.text_input("Unternehmensgröße", key="company_size")
-company_hq = st.text_input("Hauptsitz (Ort)", key="company_hq")
-company_desc = st.text_area("Kurzbeschreibung des Unternehmens", key="company_desc")
-company_contact_name = st.text_input(
-    "Ansprechperson (Name)", key="company_contact_name"
-)
-company_contact_email = st.text_input(
-    "Ansprechperson (E-Mail, Pflicht)", key="company_contact_email"
-)
 
-# --- Position / Team section ---
-st.header("Position und Team")
-position_title = st.text_input("Stellentitel (Englisch, Pflicht)", key="position_title")
-position_family = st.text_input("Job-Familie / Berufsfeld", key="position_family")
-position_seniority = st.text_input(
-    "Senioritätslevel (Pflicht)", key="position_seniority"
-)
-position_summary = st.text_area(
-    "Rollenbeschreibung / Aufgabenüberblick", key="position_summary"
-)
-position_reports_to = st.text_input("Vorgesetzte Position", key="position_reports_to")
-position_people_mgmt = st.text_input(
-    "Verantwortung (Teamleitung)", key="position_people_mgmt"
-)
-position_direct_reports = st.text_input(
-    "Direkt unterstellte Mitarbeiter (Anzahl)", key="position_direct_reports"
-)
-team_dept = st.text_input("Abteilung", key="team_dept")
-team_name = st.text_input("Teamname", key="team_name")
-team_reporting_line = st.text_input(
-    "Übergeordnete Struktur / Reporting Line", key="team_reporting_line"
-)
-team_headcount_current = st.text_input(
-    "Aktuelle Teamgröße", key="team_headcount_current"
-)
-team_headcount_target = st.text_input("Geplante Teamgröße", key="team_headcount_target")
-team_tools = st.text_input("Kollaborationstools im Team", key="team_tools")
+def _init_session_state() -> None:
+    st.session_state.setdefault("current_step", STEP_ORDER[0])
 
-# --- Location / Employment section ---
-st.header("Standort und Anstellung")
-location_work_policy = st.text_input(
-    "Arbeitsmodell (z.B. vor Ort, Hybrid, Remote)", key="location_work_policy"
-)
-location_city = st.text_input("Dienstsitz / Ort (Pflicht)", key="location_city")
-location_remote_scope = st.text_input(
-    "Remote-Anteil / -Möglichkeiten", key="location_remote_scope"
-)
-location_timezone = st.text_input("Zeitzonenanforderungen", key="location_timezone")
-location_travel_required = st.text_input(
-    "Reisetätigkeit erforderlich?", key="location_travel_required"
-)
-location_travel_pct = st.text_input("Reiseanteil (%)", key="location_travel_pct")
-employment_type = st.text_input(
-    "Anstellungsart (Pflicht, z.B. Vollzeit/Teilzeit)", key="employment_type"
-)
-employment_contract = st.text_input(
-    "Vertragsart (Pflicht, z.B. unbefristet)", key="employment_contract"
-)
-employment_start = st.text_input("Startdatum (Pflicht)", key="employment_start")
-employment_visa = st.text_input(
-    "Visa-Sponsoring / Arbeitserlaubnis", key="employment_visa"
-)
 
-# --- Compensation / Benefits section ---
-st.header("Vergütung und Benefits")
-salary_provided = st.text_input("Gehalt angegeben? (Ja/Nein)", key="salary_provided")
-salary_min = st.text_input("Gehaltsspanne Minimum", key="salary_min")
-salary_max = st.text_input("Gehaltsspanne Maximum", key="salary_max")
-salary_currency = st.text_input("Währung (z.B. EUR)", key="salary_currency")
-salary_period = st.text_input(
-    "Zeitraum des Gehalts (z.B. jährlich)", key="salary_period"
-)
-benefits_items = st.text_area(
-    "Benefits (Pflicht - eine pro Zeile)", key="benefits_items"
-)
+def _read_value(key: str) -> str:
+    value = st.session_state.get(key, "")
+    return str(value) if value is not None else ""
 
-# --- Responsibilities / Requirements section ---
-st.header("Aufgaben und Anforderungen")
-responsibilities_items = st.text_area(
-    "Aufgaben / Verantwortlichkeiten (Pflicht - eine pro Zeile)",
-    key="responsibilities_items",
-)
-hard_req = st.text_area(
-    "Fachliche Anforderungen (Pflicht - Englisch, eine pro Zeile)", key="hard_req"
-)
-if st.button("Typische Hard Skills vorschlagen (ESCO)"):
-    if not position_title or not position_title.strip():
-        st.warning("Bitte zuerst einen Stellentitel eingeben.")
-    else:
-        skills = fetch_essential_skills(position_title.strip(), language="en")
-        if skills:
-            st.session_state["hard_req"] = "\n".join(skills)
-            st.success("Typische Hard Skills wurden eingetragen.")
-        else:
-            st.warning("Keine passenden Skills in ESCO gefunden.")
-hard_opt = st.text_area("Optionale Hard Skills (eine pro Zeile)", key="hard_opt")
-soft_req = st.text_area(
-    "Soft Skills (Pflicht - Englisch, eine pro Zeile)", key="soft_req"
-)
-lang_req = st.text_area("Sprachkenntnisse (Pflicht - eine pro Zeile)", key="lang_req")
-tools_req = st.text_area(
-    "Tools & Technologien (Pflicht - Englisch, eine pro Zeile)", key="tools_req"
-)
-must_not = st.text_area(
-    "Ausschlusskriterien (optional - eine pro Zeile)", key="must_not"
-)
 
-# --- Recruiting process section ---
-st.header("Bewerbungsprozess")
-process_stages = st.text_area("Interviewphasen (eine pro Zeile)", key="process_stages")
-process_instructions = st.text_area(
-    "Bewerbungsanweisungen / Hinweise", key="process_instructions"
-)
-process_contact = st.text_input("Kontakt für Bewerbung (E-Mail)", key="process_contact")
-process_timeline = st.text_input(
-    "Geplanter Auswahlzeitraum / Timeline", key="process_timeline"
-)
+def _parse_multiline(text: str) -> list[str]:
+    if not text:
+        return []
+    if "\n" in text:
+        return [line.strip() for line in text.splitlines() if line.strip()]
+    if "," in text:
+        return [item.strip() for item in text.split(",") if item.strip()]
+    return [text.strip()] if text.strip() else []
 
-# --- Generate job description using OpenAI LLM ---
-if st.button("Stellenanzeige generieren"):
-    if not api_key:
-        st.error("Es wurde kein OpenAI API-Key angegeben.")
-        st.stop()
-    # Check required fields
-    missing = []
-    if not company_name or not company_name.strip():
-        missing.append("Firmenname")
-    if not company_contact_email or not company_contact_email.strip():
-        missing.append("Kontakt E-Mail")
-    if not position_title or not position_title.strip():
-        missing.append("Stellentitel")
-    if not position_seniority or not position_seniority.strip():
-        missing.append("Senioritätslevel")
-    if not location_city or not location_city.strip():
-        missing.append("Dienstsitz/Ort")
-    if not employment_type or not employment_type.strip():
-        missing.append("Anstellungsart")
-    if not employment_contract or not employment_contract.strip():
-        missing.append("Vertragsart")
-    if not employment_start or not employment_start.strip():
-        missing.append("Startdatum")
-    if not benefits_items or not benefits_items.strip():
-        missing.append("Benefits")
-    if not responsibilities_items or not responsibilities_items.strip():
-        missing.append("Aufgaben")
-    if not hard_req or not hard_req.strip():
-        missing.append("Fachliche Anforderungen")
-    if not soft_req or not soft_req.strip():
-        missing.append("Soft Skills")
-    if not lang_req or not lang_req.strip():
-        missing.append("Sprachkenntnisse")
-    if not tools_req or not tools_req.strip():
-        missing.append("Tools & Technologien")
-    if missing:
-        st.error("Bitte füllen Sie alle Pflichtfelder aus: " + ", ".join(missing))
-        st.stop()
 
-    # Parse multiline inputs into lists
-    def parse_list(text: str):
-        if not text:
-            return []
-        if "\n" in text:
-            items = [i.strip() for i in text.splitlines() if i.strip()]
-        elif "," in text:
-            items = [i.strip() for i in text.split(",") if i.strip()]
-        else:
-            items = [text.strip()] if text.strip() else []
-        return items
+def _missing_fields(step: int) -> list[str]:
+    missing: list[str] = []
+    for key in STEP_REQUIRED_FIELDS.get(step, ()):  # type: ignore[arg-type]
+        if not _read_value(key).strip():
+            missing.append(key)
+    return missing
 
-    responsibilities_list = parse_list(responsibilities_items)
-    benefits_list = parse_list(benefits_items)
-    hard_req_list = parse_list(hard_req)
-    soft_req_list = parse_list(soft_req)
-    lang_req_list = parse_list(lang_req)
-    tools_req_list = parse_list(tools_req)
-    hard_opt_list = parse_list(hard_opt)
-    must_not_list = parse_list(must_not)
-    # Build prompt from inputs
-    prompt_lines = []
-    prompt_lines.append(f"Unternehmen: {company_name.strip()}")
-    if company_industry:
-        prompt_lines.append(f"Branche: {company_industry.strip()}")
-    if company_size:
-        prompt_lines.append(f"Unternehmensgröße: {company_size.strip()}")
-    if company_hq:
-        prompt_lines.append(f"Hauptsitz: {company_hq.strip()}")
-    if company_desc:
-        prompt_lines.append(f"Unternehmensbeschreibung: {company_desc.strip()}")
+
+def _humanize_field(key: str) -> str:
+    labels = {
+        Keys.COMPANY_NAME: "Firmenname / Company name",
+        Keys.COMPANY_CONTACT_EMAIL: "Kontakt E-Mail / Contact email",
+        Keys.POSITION_TITLE: "Stellentitel / Job title",
+        Keys.POSITION_SENIORITY: "Senioritätslevel / Seniority",
+        Keys.LOCATION_CITY: "Dienstort / Work location",
+        Keys.EMPLOYMENT_TYPE: "Anstellungsart / Employment type",
+        Keys.EMPLOYMENT_CONTRACT: "Vertragsart / Contract type",
+        Keys.EMPLOYMENT_START: "Startdatum / Start date",
+        Keys.BENEFITS_ITEMS: "Benefits",
+        Keys.RESPONSIBILITIES: "Aufgaben / Responsibilities",
+        Keys.HARD_REQ: "Must-have Hard Skills",
+        Keys.SOFT_REQ: "Soft Skills",
+        Keys.LANG_REQ: "Sprachen / Languages",
+        Keys.TOOLS: "Tools",
+    }
+    return labels.get(key, key)
+
+
+def _render_navigation(step: int, prev_clicked: bool, next_clicked: bool) -> None:
+    if prev_clicked and step > STEP_ORDER[0]:
+        st.session_state["current_step"] = STEP_ORDER[STEP_ORDER.index(step) - 1]
+        st.session_state.setdefault("navigation_message", "")
+        st.session_state["navigation_message"] = "⟨ Zurück / Back"
+        return
+
+    if next_clicked:
+        missing = _missing_fields(step)
+        if missing:
+            labels = ", ".join(_humanize_field(key) for key in missing)
+            st.error(
+                f"Bitte füllen Sie die Pflichtfelder aus / Please complete required fields: {labels}."
+            )
+            return
+        st.session_state["current_step"] = STEP_ORDER[
+            min(STEP_ORDER.index(step) + 1, len(STEP_ORDER) - 1)
+        ]
+        st.session_state.setdefault("navigation_message", "")
+        st.session_state["navigation_message"] = "Weiter / Next"
+
+
+def _company_form(step: int) -> None:
+    with st.form(key="company_form"):
+        st.header("Unternehmen / Company")
+        st.text_input(
+            "Firmenname (Pflicht) / Company name (required)", key=Keys.COMPANY_NAME
+        )
+        st.text_input("Webseite / Website", key=Keys.COMPANY_WEBSITE)
+        st.text_input("Branche / Industry", key=Keys.COMPANY_INDUSTRY)
+        st.text_input("Unternehmensgröße / Company size", key=Keys.COMPANY_SIZE)
+        st.text_input("Hauptsitz / Headquarters", key=Keys.COMPANY_HQ)
+        st.text_area("Firmenbeschreibung / Company description", key=Keys.COMPANY_DESC)
+        st.text_input(
+            "Ansprechperson (Name) / Contact person (name)",
+            key=Keys.COMPANY_CONTACT_NAME,
+        )
+        st.text_input(
+            "Ansprechperson (E-Mail, Pflicht) / Contact email (required)",
+            key=Keys.COMPANY_CONTACT_EMAIL,
+        )
+
+        prev_clicked = False
+        next_clicked = st.form_submit_button("Weiter > / Next")
+        _render_navigation(step, prev_clicked, next_clicked)
+
+
+def _position_form(step: int) -> None:
+    with st.form(key="position_form"):
+        st.header("Position & Team / Role & Team")
+        st.text_input(
+            "Stellentitel (Englisch, Pflicht) / Job title (English, required)",
+            key=Keys.POSITION_TITLE,
+        )
+        st.text_input("Job-Familie / Job family", key=Keys.POSITION_FAMILY)
+        st.text_input(
+            "Senioritätslevel (Pflicht) / Seniority (required)",
+            key=Keys.POSITION_SENIORITY,
+        )
+        st.text_area(
+            "Rollenbeschreibung / Role summary",
+            key=Keys.POSITION_SUMMARY,
+        )
+        st.text_input(
+            "Vorgesetzte Position / Reports to",
+            key=Keys.POSITION_REPORTS_TO_TITLE,
+        )
+        st.text_input(
+            "Führungsverantwortung / People management",
+            key=Keys.POSITION_PEOPLE_MGMT,
+        )
+        st.text_input(
+            "Direkte Reports / Direct reports",
+            key=Keys.POSITION_DIRECT_REPORTS,
+        )
+        st.text_input("Abteilung / Department", key=Keys.TEAM_DEPT)
+        st.text_input("Teamname / Team name", key=Keys.TEAM_NAME)
+        st.text_input(
+            "Reporting Line / Reporting line",
+            key=Keys.TEAM_REPORTING_LINE,
+        )
+        st.text_input(
+            "Teamgröße aktuell / Current team size", key=Keys.TEAM_HEADCOUNT_CURRENT
+        )
+        st.text_input(
+            "Teamgröße geplant / Planned team size", key=Keys.TEAM_HEADCOUNT_TARGET
+        )
+        st.text_input("Tools im Team / Collaboration tools", key=Keys.TEAM_TOOLS)
+
+        prev_clicked = st.form_submit_button("< Zurück / Back")
+        next_clicked = st.form_submit_button("Weiter > / Next")
+        _render_navigation(step, prev_clicked, next_clicked)
+
+
+def _location_form(step: int) -> None:
+    with st.form(key="location_form"):
+        st.header("Standort & Anstellung / Location & Employment")
+        st.text_input(
+            "Arbeitsmodell / Work model",
+            key=Keys.LOCATION_WORK_POLICY,
+        )
+        st.text_input(
+            "Dienstort (Pflicht) / Work location (required)", key=Keys.LOCATION_CITY
+        )
+        st.text_input(
+            "Remote-Anteil / Remote scope",
+            key=Keys.LOCATION_REMOTE_SCOPE,
+        )
+        st.text_input("Zeitzone / Time zone", key=Keys.LOCATION_TZ)
+        st.text_input(
+            "Reisebereitschaft / Travel requirement",
+            key=Keys.LOCATION_TRAVEL_REQUIRED,
+        )
+        st.text_input(
+            "Reiseanteil (%) / Travel percentage (%)",
+            key=Keys.LOCATION_TRAVEL_PCT,
+        )
+        st.text_input(
+            "Anstellungsart (Pflicht) / Employment type (required)",
+            key=Keys.EMPLOYMENT_TYPE,
+        )
+        st.text_input(
+            "Vertragsart (Pflicht) / Contract type (required)",
+            key=Keys.EMPLOYMENT_CONTRACT,
+        )
+        st.text_input(
+            "Startdatum (Pflicht) / Start date (required)",
+            key=Keys.EMPLOYMENT_START,
+        )
+        st.text_input(
+            "Visa-Anforderungen / Visa requirements",
+            key=Keys.EMPLOYMENT_VISA,
+        )
+
+        prev_clicked = st.form_submit_button("< Zurück / Back")
+        next_clicked = st.form_submit_button("Weiter > / Next")
+        _render_navigation(step, prev_clicked, next_clicked)
+
+
+def _compensation_form(step: int) -> None:
+    with st.form(key="compensation_form"):
+        st.header("Vergütung & Benefits / Compensation & Benefits")
+        st.text_input(
+            "Gehalt angegeben (Ja/Nein) / Salary provided (Yes/No)",
+            key=Keys.SALARY_PROVIDED,
+        )
+        st.text_input(
+            "Gehaltsspanne Minimum / Salary range minimum", key=Keys.SALARY_MIN
+        )
+        st.text_input(
+            "Gehaltsspanne Maximum / Salary range maximum", key=Keys.SALARY_MAX
+        )
+        st.text_input("Währung / Currency", key=Keys.SALARY_CURRENCY)
+        st.text_input(
+            "Zeitraum (z.B. jährlich) / Period (e.g., yearly)",
+            key=Keys.SALARY_PERIOD,
+        )
+        st.text_area(
+            "Benefits (Pflicht) / Benefits (required)",
+            key=Keys.BENEFITS_ITEMS,
+        )
+
+        prev_clicked = st.form_submit_button("< Zurück / Back")
+        next_clicked = st.form_submit_button("Weiter > / Next")
+        _render_navigation(step, prev_clicked, next_clicked)
+
+
+def _requirements_form(step: int) -> None:
+    with st.form(key="requirements_form"):
+        st.header("Aufgaben & Anforderungen / Tasks & Requirements")
+        st.text_area(
+            "Aufgaben (Pflicht) / Responsibilities (required)",
+            key=Keys.RESPONSIBILITIES,
+        )
+        st.text_area(
+            "Must-have Hard Skills (Pflicht, Englisch) / Must-have hard skills (required, English)",
+            key=Keys.HARD_REQ,
+        )
+        st.text_area(
+            "Optionale Hard Skills / Optional hard skills",
+            key=Keys.HARD_OPT,
+        )
+        st.text_area(
+            "Soft Skills (Pflicht, Englisch) / Soft skills (required, English)",
+            key=Keys.SOFT_REQ,
+        )
+        st.text_area(
+            "Sprachen (Pflicht) / Languages (required)",
+            key=Keys.LANG_REQ,
+        )
+        st.text_area(
+            "Tools & Technologien (Pflicht, Englisch) / Tools & technologies (required, English)",
+            key=Keys.TOOLS,
+        )
+        st.text_area(
+            "Ausschlusskriterien / Disqualifiers",
+            key=Keys.MUST_NOT,
+        )
+
+        suggest_clicked = st.form_submit_button(
+            "Typische Hard Skills vorschlagen (ESCO) / Suggest hard skills (ESCO)"
+        )
+        prev_clicked = st.form_submit_button("< Zurück / Back")
+        next_clicked = st.form_submit_button("Weiter > / Next")
+
+        if suggest_clicked:
+            title = _read_value(Keys.POSITION_TITLE)
+            if not title.strip():
+                st.warning(
+                    "Bitte zuerst einen Stellentitel eingeben / Please enter a job title first."
+                )
+            else:
+                skills = fetch_essential_skills(title.strip(), language="en")
+                if skills:
+                    st.session_state[Keys.HARD_REQ] = "\n".join(skills)
+                    st.success(
+                        "Typische Hard Skills wurden eingetragen / Suggested hard skills inserted."
+                    )
+                else:
+                    st.warning(
+                        "Keine passenden Skills gefunden / No matching skills found."
+                    )
+            return
+
+        _render_navigation(step, prev_clicked, next_clicked)
+
+
+def _process_form(step: int) -> None:
+    with st.form(key="process_form"):
+        st.header("Bewerbungsprozess / Application process")
+        st.text_area(
+            "Interviewphasen / Interview stages",
+            key=Keys.PROCESS_STAGES,
+        )
+        st.text_area(
+            "Bewerbungs-Anweisungen / Application instructions",
+            key=Keys.PROCESS_INSTRUCTIONS,
+        )
+        st.text_input(
+            "Kontakt E-Mail für Bewerbung / Contact email for applications",
+            key=Keys.PROCESS_CONTACT,
+        )
+        st.text_input(
+            "Auswahl-Zeitrahmen / Selection timeline",
+            key=Keys.PROCESS_TIMELINE,
+        )
+
+        prev_clicked = st.form_submit_button("< Zurück / Back")
+        next_clicked = st.form_submit_button("Weiter > / Next")
+        _render_navigation(step, prev_clicked, next_clicked)
+
+
+def _build_prompt() -> str:
+    prompt_lines: list[str] = []
     prompt_lines.append(
-        f"Position: {position_title.strip()} (Seniorität: {position_seniority.strip()})"
+        f"Unternehmen: {_read_value(Keys.COMPANY_NAME)} | Company: {_read_value(Keys.COMPANY_NAME)}"
     )
-    if position_family:
-        prompt_lines.append(f"Job-Familie: {position_family.strip()}")
-    if position_reports_to:
-        prompt_lines.append(f"Vorgesetzte Position: {position_reports_to.strip()}")
-    if position_people_mgmt:
-        prompt_lines.append(f"Führungsverantwortung: {position_people_mgmt.strip()}")
-    if position_direct_reports:
-        prompt_lines.append(f"Direkt unterstellte: {position_direct_reports.strip()}")
+    if _read_value(Keys.COMPANY_INDUSTRY):
+        prompt_lines.append(f"Branche / Industry: {_read_value(Keys.COMPANY_INDUSTRY)}")
+    if _read_value(Keys.COMPANY_SIZE):
+        prompt_lines.append(
+            f"Unternehmensgröße / Company size: {_read_value(Keys.COMPANY_SIZE)}"
+        )
+    if _read_value(Keys.COMPANY_HQ):
+        prompt_lines.append(f"Hauptsitz / Headquarters: {_read_value(Keys.COMPANY_HQ)}")
+    if _read_value(Keys.COMPANY_DESC):
+        prompt_lines.append(
+            f"Beschreibung / Description: {_read_value(Keys.COMPANY_DESC)}"
+        )
+    prompt_lines.append(
+        f"Position: {_read_value(Keys.POSITION_TITLE)} (Seniorität / Seniority: {_read_value(Keys.POSITION_SENIORITY)})"
+    )
+    if _read_value(Keys.POSITION_FAMILY):
+        prompt_lines.append(
+            f"Job-Familie / Job family: {_read_value(Keys.POSITION_FAMILY)}"
+        )
+    if _read_value(Keys.POSITION_REPORTS_TO_TITLE):
+        prompt_lines.append(
+            f"Reports to: {_read_value(Keys.POSITION_REPORTS_TO_TITLE)}"
+        )
+    if _read_value(Keys.POSITION_PEOPLE_MGMT):
+        prompt_lines.append(
+            f"Führungsverantwortung / People management: {_read_value(Keys.POSITION_PEOPLE_MGMT)}"
+        )
+    if _read_value(Keys.POSITION_DIRECT_REPORTS):
+        prompt_lines.append(
+            f"Direkte Reports / Direct reports: {_read_value(Keys.POSITION_DIRECT_REPORTS)}"
+        )
     if (
-        team_dept
-        or team_name
-        or team_reporting_line
-        or team_headcount_current
-        or team_headcount_target
-        or team_tools
+        _read_value(Keys.TEAM_DEPT)
+        or _read_value(Keys.TEAM_NAME)
+        or _read_value(Keys.TEAM_REPORTING_LINE)
+        or _read_value(Keys.TEAM_HEADCOUNT_CURRENT)
+        or _read_value(Keys.TEAM_HEADCOUNT_TARGET)
+        or _read_value(Keys.TEAM_TOOLS)
     ):
         prompt_lines.append("Team:")
-        if team_dept:
-            prompt_lines.append(f"- Abteilung: {team_dept.strip()}")
-        if team_name:
-            prompt_lines.append(f"- Teamname: {team_name.strip()}")
-        if team_reporting_line:
-            prompt_lines.append(f"- Übergeordnet: {team_reporting_line.strip()}")
-        if team_headcount_current:
+        if _read_value(Keys.TEAM_DEPT):
             prompt_lines.append(
-                f"- Aktuelle Teamgröße: {team_headcount_current.strip()}"
+                f"- Abteilung / Department: {_read_value(Keys.TEAM_DEPT)}"
             )
-        if team_headcount_target:
+        if _read_value(Keys.TEAM_NAME):
             prompt_lines.append(
-                f"- Geplante Teamgröße: {team_headcount_target.strip()}"
+                f"- Teamname / Team name: {_read_value(Keys.TEAM_NAME)}"
             )
-        if team_tools:
-            prompt_lines.append(f"- Tools im Team: {team_tools.strip()}")
-    prompt_lines.append(f"Einsatzort: {location_city.strip()}")
-    if location_work_policy:
-        prompt_lines.append(f"Arbeitsmodell: {location_work_policy.strip()}")
-    if location_remote_scope:
-        prompt_lines.append(f"Remote-Anteil: {location_remote_scope.strip()}")
-    if location_timezone:
-        prompt_lines.append(f"Zeitzonen: {location_timezone.strip()}")
-    if location_travel_required:
-        prompt_lines.append(f"Reisebereitschaft: {location_travel_required.strip()}")
-    if location_travel_pct:
-        prompt_lines.append(f"Reiseanteil: {location_travel_pct.strip()}")
-    prompt_lines.append(f"Anstellungsart: {employment_type.strip()}")
-    prompt_lines.append(f"Vertragsart: {employment_contract.strip()}")
-    prompt_lines.append(f"Startdatum: {employment_start.strip()}")
-    if employment_visa:
-        prompt_lines.append(f"Visa/Arbeitserlaubnis: {employment_visa.strip()}")
-    if salary_provided and salary_provided.strip().lower() in ["ja", "yes"]:
-        if salary_min or salary_max:
-            range_text = (
-                (salary_min.strip() if salary_min else "?")
-                + " - "
-                + (salary_max.strip() if salary_max else "?")
+        if _read_value(Keys.TEAM_REPORTING_LINE):
+            prompt_lines.append(
+                f"- Reporting Line: {_read_value(Keys.TEAM_REPORTING_LINE)}"
             )
-            if salary_currency:
-                range_text += " " + salary_currency.strip()
-            if salary_period:
-                range_text += f" pro {salary_period.strip()}"
-            prompt_lines.append(f"Gehalt: {range_text}")
-    if benefits_list:
+        if _read_value(Keys.TEAM_HEADCOUNT_CURRENT):
+            prompt_lines.append(
+                f"- Teamgröße aktuell / Current headcount: {_read_value(Keys.TEAM_HEADCOUNT_CURRENT)}"
+            )
+        if _read_value(Keys.TEAM_HEADCOUNT_TARGET):
+            prompt_lines.append(
+                f"- Teamgröße geplant / Planned headcount: {_read_value(Keys.TEAM_HEADCOUNT_TARGET)}"
+            )
+        if _read_value(Keys.TEAM_TOOLS):
+            prompt_lines.append(f"- Tools: {_read_value(Keys.TEAM_TOOLS)}")
+    prompt_lines.append(f"Dienstort / Location: {_read_value(Keys.LOCATION_CITY)}")
+    if _read_value(Keys.LOCATION_WORK_POLICY):
+        prompt_lines.append(
+            f"Arbeitsmodell / Work model: {_read_value(Keys.LOCATION_WORK_POLICY)}"
+        )
+    if _read_value(Keys.LOCATION_REMOTE_SCOPE):
+        prompt_lines.append(
+            f"Remote-Anteil / Remote scope: {_read_value(Keys.LOCATION_REMOTE_SCOPE)}"
+        )
+    if _read_value(Keys.LOCATION_TZ):
+        prompt_lines.append(
+            f"Zeitzonenanforderungen / Time zone: {_read_value(Keys.LOCATION_TZ)}"
+        )
+    if _read_value(Keys.LOCATION_TRAVEL_REQUIRED):
+        prompt_lines.append(
+            f"Reisetätigkeit / Travel requirement: {_read_value(Keys.LOCATION_TRAVEL_REQUIRED)}"
+        )
+    if _read_value(Keys.LOCATION_TRAVEL_PCT):
+        prompt_lines.append(
+            f"Reiseanteil / Travel percentage: {_read_value(Keys.LOCATION_TRAVEL_PCT)}"
+        )
+    prompt_lines.append(
+        f"Anstellungsart / Employment type: {_read_value(Keys.EMPLOYMENT_TYPE)}"
+    )
+    prompt_lines.append(
+        f"Vertragsart / Contract type: {_read_value(Keys.EMPLOYMENT_CONTRACT)}"
+    )
+    prompt_lines.append(
+        f"Startdatum / Start date: {_read_value(Keys.EMPLOYMENT_START)}"
+    )
+    if _read_value(Keys.EMPLOYMENT_VISA):
+        prompt_lines.append(f"Visa / Work permit: {_read_value(Keys.EMPLOYMENT_VISA)}")
+
+    salary_toggle = _read_value(Keys.SALARY_PROVIDED).strip().lower()
+    if salary_toggle in {"ja", "yes", "y"}:
+        min_salary = _read_value(Keys.SALARY_MIN)
+        max_salary = _read_value(Keys.SALARY_MAX)
+        if min_salary or max_salary:
+            range_text = f"{min_salary or '?'} - {max_salary or '?'}"
+            if _read_value(Keys.SALARY_CURRENCY):
+                range_text = f"{range_text} {_read_value(Keys.SALARY_CURRENCY)}"
+            if _read_value(Keys.SALARY_PERIOD):
+                range_text = f"{range_text} pro / per {_read_value(Keys.SALARY_PERIOD)}"
+            prompt_lines.append(f"Gehalt / Salary: {range_text}")
+
+    benefits = _parse_multiline(_read_value(Keys.BENEFITS_ITEMS))
+    if benefits:
         prompt_lines.append("Benefits:")
-        for b in benefits_list:
-            prompt_lines.append(f"- {b}")
-    if responsibilities_list:
-        prompt_lines.append("Aufgaben:")
-        for r in responsibilities_list:
-            prompt_lines.append(f"- {r}")
-    req_lines = []
-    if hard_req_list:
-        req_lines.append(f"Fachliche Fähigkeiten: {', '.join(hard_req_list)}")
-    if soft_req_list:
-        req_lines.append(f"Soziale Kompetenzen: {', '.join(soft_req_list)}")
-    if tools_req_list:
-        req_lines.append(f"Tools und Technologien: {', '.join(tools_req_list)}")
-    if lang_req_list:
-        req_lines.append(f"Sprachen: {', '.join(lang_req_list)}")
-    if hard_opt_list:
-        req_lines.append(f"Optional: {', '.join(hard_opt_list)}")
-    if must_not_list:
-        req_lines.append(f"Ausschlusskriterien: {', '.join(must_not_list)}")
-    if req_lines:
-        prompt_lines.append("Anforderungen:")
-        for line in req_lines:
-            prompt_lines.append(f"- {line}")
-    if process_stages or process_instructions or process_contact or process_timeline:
-        prompt_lines.append("Prozess:")
+        prompt_lines.extend([f"- {benefit}" for benefit in benefits])
+
+    responsibilities = _parse_multiline(_read_value(Keys.RESPONSIBILITIES))
+    if responsibilities:
+        prompt_lines.append("Aufgaben / Responsibilities:")
+        prompt_lines.extend([f"- {item}" for item in responsibilities])
+
+    requirements: list[str] = []
+    hard_req = _parse_multiline(_read_value(Keys.HARD_REQ))
+    soft_req = _parse_multiline(_read_value(Keys.SOFT_REQ))
+    lang_req = _parse_multiline(_read_value(Keys.LANG_REQ))
+    tools_req = _parse_multiline(_read_value(Keys.TOOLS))
+    hard_opt = _parse_multiline(_read_value(Keys.HARD_OPT))
+    must_not = _parse_multiline(_read_value(Keys.MUST_NOT))
+
+    if hard_req:
+        requirements.append(
+            f"Fachliche Anforderungen / Hard skills: {', '.join(hard_req)}"
+        )
+    if soft_req:
+        requirements.append(f"Soft Skills: {', '.join(soft_req)}")
+    if lang_req:
+        requirements.append(f"Sprachen / Languages: {', '.join(lang_req)}")
+    if tools_req:
+        requirements.append(f"Tools: {', '.join(tools_req)}")
+    if hard_opt:
+        requirements.append(
+            f"Optionale Skills / Optional skills: {', '.join(hard_opt)}"
+        )
+    if must_not:
+        requirements.append(
+            f"Ausschlusskriterien / Disqualifiers: {', '.join(must_not)}"
+        )
+    if requirements:
+        prompt_lines.append("Anforderungen / Requirements:")
+        prompt_lines.extend([f"- {req}" for req in requirements])
+
+    process_stages = _parse_multiline(_read_value(Keys.PROCESS_STAGES))
+    if (
+        process_stages
+        or _read_value(Keys.PROCESS_INSTRUCTIONS)
+        or _read_value(Keys.PROCESS_CONTACT)
+        or _read_value(Keys.PROCESS_TIMELINE)
+    ):
+        prompt_lines.append("Bewerbungsprozess / Application process:")
         if process_stages:
-            stage_list = parse_list(process_stages)
-            if stage_list:
-                prompt_lines.append("  Phasen:")
-                for s in stage_list:
-                    prompt_lines.append(f"  - {s}")
-        if process_instructions:
-            prompt_lines.append(f"  Hinweise: {process_instructions.strip()}")
-        if process_contact:
-            prompt_lines.append(f"  Kontakt: {process_contact.strip()}")
-        if process_timeline:
-            prompt_lines.append(f"  Zeitrahmen: {process_timeline.strip()}")
-    prompt = "\n".join(prompt_lines)
+            prompt_lines.append("  Phasen / Stages:")
+            prompt_lines.extend([f"  - {stage}" for stage in process_stages])
+        if _read_value(Keys.PROCESS_INSTRUCTIONS):
+            prompt_lines.append(
+                f"  Hinweise / Instructions: {_read_value(Keys.PROCESS_INSTRUCTIONS)}"
+            )
+        if _read_value(Keys.PROCESS_CONTACT):
+            prompt_lines.append(
+                f"  Kontakt / Contact: {_read_value(Keys.PROCESS_CONTACT)}"
+            )
+        if _read_value(Keys.PROCESS_TIMELINE):
+            prompt_lines.append(
+                f"  Zeitrahmen / Timeline: {_read_value(Keys.PROCESS_TIMELINE)}"
+            )
+
+    return "\n".join(prompt_lines)
+
+
+def _render_review() -> None:
+    st.header("Review & Generierung / Review & Generate")
+    st.write(
+        "Bitte prüfen Sie Ihre Angaben bevor die Stellenanzeige generiert wird. / Please review your inputs before generating the job ad."
+    )
+
+    missing_global = [key for key in REQUIRED_FIELDS if not _read_value(key).strip()]
+    if missing_global:
+        st.warning(
+            "Einige Pflichtfelder fehlen noch / Some required fields are missing: "
+            + ", ".join(_humanize_field(key) for key in missing_global)
+        )
+
+    st.subheader("Eingegebene Daten / Entered data")
+    for key in REQUIRED_FIELDS:
+        st.text(f"{_humanize_field(key)}: {_read_value(key)}")
+
+    if st.button("< Zurück / Back to edit"):
+        st.session_state["current_step"] = STEP_ORDER[-2]
+
+    if st.button("Stellenanzeige generieren / Generate job ad"):
+        _generate_job_ad()
+
+
+def _generate_job_ad() -> None:
+    api_key = (
+        os.getenv("OPENAI_API_KEY")
+        or getattr(st.secrets, "OPENAI_API_KEY", None)
+        or st.session_state.get("openai_api_key_input")
+    )
+    if not api_key:
+        st.error("Es wurde kein OpenAI API-Key angegeben / No OpenAI API key provided.")
+        return
+    openai.api_key = api_key
+
+    missing = [key for key in REQUIRED_FIELDS if not _read_value(key).strip()]
+    if missing:
+        st.error(
+            "Bitte füllen Sie alle Pflichtfelder aus / Please complete all required fields."
+        )
+        return
+
+    prompt = _build_prompt()
     messages = [
         {
             "role": "system",
             "content": "Du bist ein erfahrener HR-Experte und schreibst professionelle Stellenanzeigen auf Deutsch.",
         },
-        {"role": "user", "content": prompt},
+        {
+            "role": "user",
+            "content": (
+                "Schreibe auf Basis der folgenden strukturierten Daten eine ansprechende zweisprachige (DE & EN) Stellenanzeige."
+                "\nPlease write a compelling bilingual (DE & EN) job ad based on the structured data.\n"
+                f"Daten / Data:\n{prompt}"
+            ),
+        },
     ]
-    try:
-        response = openai.ChatCompletion.create(
-            model=MODEL_NAME, messages=messages, temperature=0.7, max_tokens=1024
-        )
-        job_ad = response["choices"][0]["message"]["content"].strip()
-        st.subheader("Generierte Stellenanzeige:")
-        st.markdown(job_ad)
-        st.download_button(
-            "Als Textdatei herunterladen", job_ad, file_name="Stellenanzeige.txt"
-        )
-    except Exception as e:
-        st.error(f"Fehler bei der Generierung: {e}")
+    with st.spinner("Generiere Stellenanzeige... / Generating job ad..."):
+        for attempt in range(3):
+            try:
+                response = openai.ChatCompletion.create(
+                    model=MODEL_NAME,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=1200,
+                    request_timeout=30,
+                )
+                job_ad = response["choices"][0]["message"]["content"].strip()
+                st.subheader("Generierte Stellenanzeige / Generated job ad")
+                st.markdown(job_ad)
+                st.download_button(
+                    "Als Textdatei herunterladen / Download as text",
+                    job_ad,
+                    file_name="stellenanzeige.txt",
+                )
+                return
+            except Exception as exc:  # pragma: no cover - API errors handled by UI
+                if attempt < 2:
+                    wait_time = 2**attempt
+                    st.warning(
+                        "API-Aufruf fehlgeschlagen, neuer Versuch folgt / API call failed, retrying..."
+                    )
+                    time.sleep(wait_time)
+                else:
+                    st.error(f"Fehler bei der Generierung: {exc}")
+
+
+def _render_step() -> None:
+    current_step: int = st.session_state.get("current_step", STEP_ORDER[0])
+    if current_step == 1:
+        _company_form(current_step)
+    elif current_step == 2:
+        _position_form(current_step)
+    elif current_step == 3:
+        _location_form(current_step)
+    elif current_step == 4:
+        _compensation_form(current_step)
+    elif current_step == 5:
+        _requirements_form(current_step)
+    elif current_step == 6:
+        _process_form(current_step)
+    else:
+        _render_review()
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title="Job Description Generator", page_icon="📝", layout="wide"
+    )
+    st.title("Job Description Generator / Stellenanzeigen-Generator")
+    st.markdown(
+        "Dieses Streamlit-Tool generiert zweisprachige Stellenanzeigen auf Basis strukturierter Eingaben. "
+        "This Streamlit tool generates bilingual job ads based on structured inputs."
+    )
+
+    _init_session_state()
+
+    st.session_state["openai_api_key_input"] = st.sidebar.text_input(
+        "OpenAI API-Key eingeben / Enter OpenAI API key",
+        type="password",
+        value=st.session_state.get("openai_api_key_input", ""),
+    )
+
+    progress_ratio = STEP_ORDER.index(st.session_state.get("current_step", 1)) / (
+        len(STEP_ORDER) - 1
+    )
+    st.progress(progress_ratio)
+
+    _render_step()
+
+
+if __name__ == "__main__":
+    main()
