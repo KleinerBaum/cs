@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
-from functools import partial
+from functools import lru_cache, partial
+from pathlib import Path
+from string import Template
 from typing import Any, cast
 
 import streamlit as st
@@ -71,6 +74,9 @@ SS_PENDING_ESCO_HARD_REQ = "pending_esco_hard_req"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
+
+BACKGROUND_IMAGE_PATH = Path("images/AdobeStock_506577005.jpeg")
+LOGO_IMAGE_PATH = Path("images/animation_pulse_Default_7kigl22lw.gif")
 
 
 _STEP_LABEL_KEYS = {
@@ -187,7 +193,7 @@ def _apply_theme(theme: str) -> None:
         color: var(--cs-text);
     }
     .stApp {
-        background: var(--cs-bg);
+        background-color: var(--cs-bg);
     }
     .stSidebar, .sidebar-content {
         background: var(--cs-surface);
@@ -211,7 +217,7 @@ def _apply_theme(theme: str) -> None:
         color: var(--cs-text);
     }
     .stApp {
-        background: var(--cs-bg);
+        background-color: var(--cs-bg);
     }
     .stSidebar, .sidebar-content {
         background: var(--cs-surface);
@@ -233,6 +239,98 @@ def _apply_theme(theme: str) -> None:
 
     css = css_dark if theme == THEME_DARK else css_light
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+    st.markdown(
+        f"<script>document.body.dataset.theme='{theme}';</script>",
+        unsafe_allow_html=True,
+    )
+
+
+@lru_cache(maxsize=4)
+def _load_base64_asset(path: str) -> str | None:
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+
+    return base64.b64encode(data).decode("utf-8")
+
+
+def _apply_background(image_path: Path) -> None:
+    encoded = _load_base64_asset(str(image_path))
+    if not encoded:
+        return
+
+    css_template = Template(
+        """
+        .stApp {
+            background-image: linear-gradient(180deg, rgba(17, 24, 39, 0.60) 0%, rgba(17, 24, 39, 0.35) 100%),
+                url('data:image/jpeg;base64,$encoded');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .block-container {
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 18px;
+            padding: 26px 30px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            margin-top: 18px;
+        }
+
+        [data-theme="dark"] .block-container {
+            background: rgba(17, 24, 39, 0.86);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        """
+    )
+    css = css_template.safe_substitute(encoded=encoded)
+
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+def _render_branding(logo_path: Path) -> None:
+    encoded = _load_base64_asset(str(logo_path))
+    if not encoded:
+        return
+
+    st.markdown(
+        Template(
+            """
+            <style>
+            .cs-logo-container {
+                position: fixed;
+                top: 1.4rem;
+                right: 1.6rem;
+                padding: 0.85rem 1.1rem;
+                border-radius: 1rem;
+                background: rgba(255, 255, 255, 0.9);
+                box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+                backdrop-filter: blur(6px);
+                border: 1px solid rgba(255, 255, 255, 0.6);
+                z-index: 999;
+            }
+
+            [data-theme="dark"] .cs-logo-container {
+                background: rgba(26, 32, 44, 0.92);
+                border-color: rgba(255, 255, 255, 0.2);
+            }
+
+            .cs-logo-container img {
+                display: block;
+                max-height: 72px;
+                width: auto;
+            }
+            </style>
+            <div class="cs-logo-container">
+                <img src="data:image/gif;base64,$logo" alt="Animated Need Analysis Wizard logo" />
+            </div>
+            """
+        ).safe_substitute(logo=encoded),
+        unsafe_allow_html=True,
+    )
 
 
 def _guess_text_language(text: str, fallback: str) -> str:
@@ -299,6 +397,8 @@ def run_app() -> None:
             _reset_session()
 
     _apply_theme(st.session_state.get(SS_THEME, THEME_LIGHT))
+    _apply_background(BACKGROUND_IMAGE_PATH)
+    _render_branding(LOGO_IMAGE_PATH)
 
     st.title(APP_NAME)
     st.caption(t(lang, "app.tagline"))
@@ -910,9 +1010,7 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
 
     if do_search and query:
         try:
-            results = search_occupations(
-                query, language=query_lang, limit=10
-            )
+            results = search_occupations(query, language=query_lang, limit=10)
             st.session_state["esco_results"] = results
         except ESCOError as e:
             st.error(f"{t(lang, 'esco.error')}: {e}")
