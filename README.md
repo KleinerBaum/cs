@@ -20,7 +20,7 @@ The sidebar lets you switch between German and English labels, pick a light/dark
 
 ## Configuration
 
-Set the OpenAI API key via Streamlit secrets (e.g., `.streamlit/secrets.toml`) or the `OPENAI_API_KEY` environment variable. The UI no longer exposes a text field for the key; the app will stop early with a clear error if the key is missing. Both a top-level key and a nested `[general]` section are supported.
+Set the OpenAI API key via Streamlit secrets (e.g., `.streamlit/secrets.toml`) or the `OPENAI_API_KEY` environment variable **before starting the app**. The UI no longer exposes a text field for the key; the app will stop early with a clear error if the key is missing. Both a top-level key and a nested `[general]` section are supported.
 
 ```toml
 OPENAI_API_KEY = "sk-..."
@@ -39,4 +39,5 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
+export OPENAI_API_KEY="sk-..."  # set before launching the UI
 streamlit run app.py
