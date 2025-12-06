@@ -18,13 +18,12 @@ from .settings import LOW_CONFIDENCE_THRESHOLD, MAX_PRIMARY_QUESTIONS_PER_STEP
 
 ShowIf = Callable[[dict[str, Any]], bool]
 
-
 @dataclass(frozen=True)
 class Question:
     id: str
     path: str
     step: str
-    input_type: str  # text|textarea|email|bool|number|date|select|multiselect|list
+    input_type: str  # e.g. text|textarea|email|bool|number|date|select|multiselect|list
     required: bool = False
     advanced: bool = False
     label_de: str = ""
@@ -34,7 +33,6 @@ class Question:
     options_group: str | None = None
     options_values: tuple[str, ...] | None = None
     show_if: ShowIf | None = None
-
 
 STEPS: tuple[str, ...] = (
     "intake",
@@ -48,25 +46,21 @@ STEPS: tuple[str, ...] = (
     "review",
 )
 
-
+# Show/hide logic for conditional questions
 def _is_remote(profile: dict[str, Any]) -> bool:
     return get_value(profile, Keys.LOCATION_WORK_POLICY) == "remote"
-
 
 def _travel_required(profile: dict[str, Any]) -> bool:
     return bool(get_value(profile, Keys.LOCATION_TRAVEL_REQUIRED))
 
-
 def _salary_provided(profile: dict[str, Any]) -> bool:
     return bool(get_value(profile, Keys.SALARY_PROVIDED))
-
 
 def _people_mgmt(profile: dict[str, Any]) -> bool:
     return bool(get_value(profile, Keys.POSITION_PEOPLE_MGMT))
 
-
 def question_bank() -> list[Question]:
-    """Single source of truth for all questions."""
+    """Single source of truth for all questions (DE/EN)."""
     return [
         # --- Company
         Question(
@@ -224,9 +218,8 @@ def question_bank() -> list[Question]:
             path=Keys.POSITION_FAMILY,
             step="team",
             input_type="text",
-            label_de="Jobfamilie",
+            label_de="Job-Familie",
             label_en="Job family",
-            advanced=True,
         ),
         Question(
             id="position_seniority",
@@ -234,57 +227,58 @@ def question_bank() -> list[Question]:
             step="team",
             input_type="select",
             required=True,
+            label_de="Seniority Level*",
+            label_en="Seniority level*",
             options_group="seniority",
             options_values=SENIORITY_VALUES,
-            label_de="Senioritätslevel*",
-            label_en="Seniority level*",
         ),
         Question(
             id="position_summary",
             path=Keys.POSITION_SUMMARY,
-            step="team",
+            step="framework",
             input_type="textarea",
-            label_de="Rollen-Übersicht",
+            label_de="Zusammenfassung der Rolle",
             label_en="Role summary",
+            advanced=True,
         ),
         Question(
-            id="position_reports_to",
+            id="position_reports_to_title",
             path=Keys.POSITION_REPORTS_TO_TITLE,
-            step="team",
+            step="framework",
             input_type="text",
-            label_de="Reports to (Titel)",
-            label_en="Reports to (title)",
+            label_de="Direkte/r Vorgesetzte/r (Titel)",
+            label_en="Reports to (job title)",
             advanced=True,
         ),
         Question(
             id="position_people_mgmt",
             path=Keys.POSITION_PEOPLE_MGMT,
-            step="team",
+            step="framework",
             input_type="bool",
-            label_de="Disziplinarische Führung?",
-            label_en="People management?",
+            label_de="Hat Führungsverantwortung?",
+            label_en="Includes people management?",
             advanced=True,
         ),
         Question(
             id="position_direct_reports",
             path=Keys.POSITION_DIRECT_REPORTS,
-            step="team",
+            step="framework",
             input_type="number",
-            label_de="Direkte Reports (#)",
-            label_en="Direct reports (#)",
-            advanced=True,
+            label_de="Anzahl direkte Reports",
+            label_en="Number of direct reports",
             show_if=_people_mgmt,
+            advanced=True,
         ),
-        # --- Framework: location & employment
+        # --- Framework (Location/Employment)
         Question(
-            id="work_policy",
+            id="location_work_policy",
             path=Keys.LOCATION_WORK_POLICY,
             step="framework",
             input_type="select",
-            options_group="work_policy",
-            options_values=WORK_POLICY_VALUES,
             label_de="Arbeitsmodell",
             label_en="Work policy",
+            options_group="work_policy",
+            options_values=WORK_POLICY_VALUES,
         ),
         Question(
             id="location_city",
@@ -292,53 +286,47 @@ def question_bank() -> list[Question]:
             step="framework",
             input_type="text",
             required=True,
-            label_de="Primärer Standort / Stadt*",
-            label_en="Primary city / location*",
-            help_de="Auch bei Remote: bevorzugter Hub / Hauptstandort.",
-            help_en="For remote: preferred hub / primary location.",
+            label_de="Hauptstandort/Stadt*",
+            label_en="Primary location (city)*",
         ),
         Question(
-            id="remote_scope",
+            id="location_remote_scope",
             path=Keys.LOCATION_REMOTE_SCOPE,
             step="framework",
             input_type="text",
-            label_de="Remote Scope",
-            label_en="Remote scope",
-            help_de="z.B. Deutschland, EU, global",
-            help_en="e.g. Germany, EU, global",
-            advanced=True,
+            label_de="Remote-Anteil / -Region",
+            label_en="Remote scope / region",
             show_if=_is_remote,
+            advanced=True,
         ),
         Question(
-            id="timezone_req",
+            id="location_tz",
             path=Keys.LOCATION_TZ,
             step="framework",
             input_type="text",
-            label_de="Zeitzonen-Anforderungen",
-            label_en="Timezone requirements",
-            help_de="z.B. 4h Overlap mit CET",
-            help_en="e.g. 4h overlap with CET",
-            advanced=True,
+            label_de="Zeitzone(n)",
+            label_en="Timezone(s)",
             show_if=_is_remote,
+            advanced=True,
         ),
         Question(
-            id="travel_required",
+            id="location_travel_required",
             path=Keys.LOCATION_TRAVEL_REQUIRED,
             step="framework",
             input_type="bool",
-            label_de="Reisen erforderlich?",
+            label_de="Reisetätigkeit erforderlich?",
             label_en="Travel required?",
             advanced=True,
         ),
         Question(
-            id="travel_pct",
+            id="location_travel_pct",
             path=Keys.LOCATION_TRAVEL_PCT,
             step="framework",
             input_type="number",
-            label_de="Reiseanteil (%)",
-            label_en="Travel percentage (%)",
-            advanced=True,
+            label_de="Reisetätigkeit (% Arbeitszeit)",
+            label_en="Approx. travel (% of time)",
             show_if=_travel_required,
+            advanced=True,
         ),
         Question(
             id="employment_type",
@@ -346,128 +334,67 @@ def question_bank() -> list[Question]:
             step="framework",
             input_type="select",
             required=True,
-            options_group="employment_type",
-            options_values=EMPLOYMENT_TYPE_VALUES,
             label_de="Anstellungsart*",
             label_en="Employment type*",
+            options_group="employment_type",
+            options_values=EMPLOYMENT_TYPE_VALUES,
         ),
         Question(
-            id="contract_type",
+            id="employment_contract",
             path=Keys.EMPLOYMENT_CONTRACT,
             step="framework",
             input_type="select",
             required=True,
-            options_group="contract_type",
-            options_values=CONTRACT_TYPE_VALUES,
             label_de="Vertragsart*",
             label_en="Contract type*",
+            options_group="contract_type",
+            options_values=CONTRACT_TYPE_VALUES,
         ),
         Question(
-            id="start_date",
+            id="employment_start",
             path=Keys.EMPLOYMENT_START,
             step="framework",
             input_type="date",
             required=True,
-            label_de="Startdatum*",
-            label_en="Start date*",
+            label_de="Gewünschtes Startdatum*",
+            label_en="Desired start date*",
         ),
         Question(
-            id="visa",
+            id="employment_visa",
             path=Keys.EMPLOYMENT_VISA,
             step="framework",
             input_type="bool",
-            label_de="Visa Sponsorship möglich?",
-            label_en="Visa sponsorship available?",
+            label_de="Visa-Sponsoring möglich?",
+            label_en="Visa sponsorship possible?",
             advanced=True,
         ),
-        # --- Benefits / Compensation
+        # --- Tasks & Responsibilities
         Question(
-            id="salary_provided",
-            path=Keys.SALARY_PROVIDED,
-            step="benefits",
-            input_type="bool",
-            label_de="Gehaltsspanne angeben?",
-            label_en="Provide salary range?",
-            advanced=True,
-        ),
-        Question(
-            id="salary_min",
-            path=Keys.SALARY_MIN,
-            step="benefits",
-            input_type="number",
-            label_de="Gehalt min",
-            label_en="Salary min",
-            advanced=True,
-            show_if=_salary_provided,
-        ),
-        Question(
-            id="salary_max",
-            path=Keys.SALARY_MAX,
-            step="benefits",
-            input_type="number",
-            label_de="Gehalt max",
-            label_en="Salary max",
-            advanced=True,
-            show_if=_salary_provided,
-        ),
-        Question(
-            id="salary_currency",
-            path=Keys.SALARY_CURRENCY,
-            step="benefits",
-            input_type="text",
-            label_de="Währung",
-            label_en="Currency",
-            advanced=True,
-            show_if=_salary_provided,
-        ),
-        Question(
-            id="salary_period",
-            path=Keys.SALARY_PERIOD,
-            step="benefits",
-            input_type="select",
-            options_group="salary_period",
-            options_values=SALARY_PERIOD_VALUES,
-            label_de="Zeitraum",
-            label_en="Period",
-            advanced=True,
-            show_if=_salary_provided,
-        ),
-        Question(
-            id="benefits_items",
-            path=Keys.BENEFITS_ITEMS,
-            step="benefits",
-            input_type="list",
-            required=True,
-            label_de="Benefits* (je Zeile 1 Punkt)",
-            label_en="Benefits* (one per line)",
-        ),
-        # --- Responsibilities
-        Question(
-            id="responsibilities_items",
+            id="responsibilities",
             path=Keys.RESPONSIBILITIES,
             step="tasks",
             input_type="list",
             required=True,
-            label_de="Aufgaben* (je Zeile 1 Punkt)",
-            label_en="Responsibilities* (one per line)",
+            label_de="Aufgaben/Pakete*",
+            label_en="Key responsibilities*",
         ),
-        # --- Requirements
+        # --- Skills Requirements
         Question(
             id="hard_req",
             path=Keys.HARD_REQ,
             step="skills",
             input_type="list",
             required=True,
-            label_de="Hard Skills* (must-have)",
-            label_en="Hard skills* (must-have)",
+            label_de="Hard Skills (Pflicht)*",
+            label_en="Hard skills (required)*",
         ),
         Question(
             id="hard_req_en",
             path=Keys.HARD_REQ_EN,
             step="skills",
             input_type="list",
-            label_de="Hard Skills (EN)",
-            label_en="Hard skills (EN)",
+            label_de="Hard Skills (englische Version, optional)",
+            label_en="Hard skills (English version, optional)",
             advanced=True,
         ),
         Question(
@@ -475,9 +402,8 @@ def question_bank() -> list[Question]:
             path=Keys.HARD_OPT,
             step="skills",
             input_type="list",
-            label_de="Hard Skills (optional/nice-to-have)",
-            label_en="Hard skills (optional/nice-to-have)",
-            advanced=True,
+            label_de="Hard Skills (optional)",
+            label_en="Hard skills (optional)",
         ),
         Question(
             id="soft_req",
@@ -485,16 +411,16 @@ def question_bank() -> list[Question]:
             step="skills",
             input_type="list",
             required=True,
-            label_de="Soft Skills*",
-            label_en="Soft skills*",
+            label_de="Soft Skills (Pflicht)*",
+            label_en="Soft skills (required)*",
         ),
         Question(
             id="soft_req_en",
             path=Keys.SOFT_REQ_EN,
             step="skills",
             input_type="list",
-            label_de="Soft Skills (EN)",
-            label_en="Soft skills (EN)",
+            label_de="Soft Skills (englische Version, optional)",
+            label_en="Soft skills (English version, optional)",
             advanced=True,
         ),
         Question(
@@ -503,10 +429,8 @@ def question_bank() -> list[Question]:
             step="skills",
             input_type="list",
             required=True,
-            label_de="Sprachen*",
-            label_en="Languages*",
-            help_de="z.B. Deutsch C1, Englisch B2",
-            help_en="e.g. German C1, English B2",
+            label_de="Sprachen (Pflicht)*",
+            label_en="Languages (required)*",
         ),
         Question(
             id="tools",
@@ -514,16 +438,16 @@ def question_bank() -> list[Question]:
             step="skills",
             input_type="list",
             required=True,
-            label_de="Tools/Technologien*",
-            label_en="Tools/technologies*",
+            label_de="Tools & Technologien (Pflicht)*",
+            label_en="Tools & technologies (required)*",
         ),
         Question(
             id="tools_en",
             path=Keys.TOOLS_EN,
             step="skills",
             input_type="list",
-            label_de="Tools/Technologien (EN)",
-            label_en="Tools/technologies (EN)",
+            label_de="Tools & Technologien (englische Version, optional)",
+            label_en="Tools & technologies (English version, optional)",
             advanced=True,
         ),
         Question(
@@ -531,29 +455,36 @@ def question_bank() -> list[Question]:
             path=Keys.MUST_NOT,
             step="skills",
             input_type="list",
-            label_de="Must-not-haves",
+            label_de="No-Gos (Ausschlusskriterien)",
             label_en="Must-not-haves",
             advanced=True,
         ),
-        # --- Recruiting process
+        # --- Benefits
+        Question(
+            id="benefits_items",
+            path=Keys.BENEFITS_ITEMS,
+            step="benefits",
+            input_type="list",
+            required=True,
+            label_de="Benefits & Angebote*",
+            label_en="Benefits & perks*",
+        ),
+        # --- Recruiting Process
         Question(
             id="process_stages",
             path=Keys.PROCESS_STAGES,
             step="process",
             input_type="list",
-            label_de="Interview-Stages",
+            label_de="Interview-Stufen",
             label_en="Interview stages",
-            help_de="z.B. HR Call, Fachgespräch, Case, Final",
-            help_en="e.g. HR call, technical interview, case, final",
-            advanced=True,
         ),
         Question(
             id="process_timeline",
             path=Keys.PROCESS_TIMELINE,
             step="process",
             input_type="text",
-            label_de="Timeline",
-            label_en="Timeline",
+            label_de="Voraussichtlicher Prozessablauf",
+            label_en="Expected timeline",
             advanced=True,
         ),
         Question(
@@ -561,7 +492,7 @@ def question_bank() -> list[Question]:
             path=Keys.PROCESS_INSTRUCTIONS,
             step="process",
             input_type="textarea",
-            label_de="Bewerbungsanweisungen",
+            label_de="Hinweise zur Bewerbung",
             label_en="Application instructions",
             advanced=True,
         ),
@@ -570,120 +501,51 @@ def question_bank() -> list[Question]:
             path=Keys.PROCESS_CONTACT,
             step="process",
             input_type="email",
-            label_de="Recruiting Kontakt E-Mail",
-            label_en="Recruiting contact email",
+            label_de="Kontakt-E-Mail für Bewerbung",
+            label_en="Contact email for application",
+            help_de="Falls unterschiedlich von obiger Kontaktperson.",
+            help_en="If different from the contact person above.",
             advanced=True,
         ),
     ]
 
-
-def question_label(q: Question, lang: str) -> str:
-    return q.label_de if lang == LANG_DE else q.label_en
-
-
-def question_help(q: Question, lang: str) -> str:
-    return q.help_de if lang == LANG_DE else q.help_en
-
-
-def _is_low_conf(profile: dict[str, Any], path: str) -> bool:
-    rec = get_record(profile, path)
-    if not rec:
-        return False
-    conf = rec.get("confidence")
-    prov = rec.get("provenance")
-    if prov == "user":
-        return False
-    return conf is not None and conf < LOW_CONFIDENCE_THRESHOLD
-
-
-def select_questions_for_step(
-    profile: dict[str, Any], step: str
-) -> tuple[list[Question], list[Question]]:
-    """Return (primary, more_details) questions for a step."""
-    qs = [q for q in question_bank() if q.step == step]
-
-    filtered: list[Question] = []
-    for q in qs:
-        if q.show_if is None:
-            filtered.append(q)
-        else:
-            try:
-                if q.show_if(profile):
-                    filtered.append(q)
-            except Exception:
-                filtered.append(q)
-
-    def score(q: Question) -> tuple[int, int, str]:
-        missing = is_missing(profile, q.path)
-        low_conf = _is_low_conf(profile, q.path)
-        if q.required and missing:
-            primary_rank = 0
-        elif q.required and low_conf:
-            primary_rank = 1
-        elif missing:
-            primary_rank = 2
-        elif low_conf:
-            primary_rank = 3
-        else:
-            primary_rank = 4
-        adv_rank = 1 if q.advanced else 0
-        return (primary_rank, adv_rank, q.id)
-
-    filtered.sort(key=score)
-
+def select_questions_for_step(profile: dict[str, Any], step: str) -> tuple[list[Question], list[Question]]:
+    """Return (primary, advanced) question lists for a given step."""
+    qs = [q for q in question_bank() if q.step == step and (not q.show_if or q.show_if(profile))]
     primary: list[Question] = []
-    more: list[Question] = []
-    for q in filtered:
-        if len(primary) < MAX_PRIMARY_QUESTIONS_PER_STEP and not q.advanced:
-            primary.append(q)
+    advanced: list[Question] = []
+    for q in qs:
+        if q.advanced or q.id.startswith("intake_"):
+            advanced.append(q)
         else:
-            more.append(q)
-
-    while len(primary) < min(MAX_PRIMARY_QUESTIONS_PER_STEP, len(filtered)) and more:
-        primary.append(more.pop(0))
-
-    return primary, more
-
-
-def required_fields_for_step(step: str) -> set[str]:
-    mapping = {
-        "company": {Keys.COMPANY_NAME, Keys.COMPANY_CONTACT_EMAIL},
-        "team": {Keys.POSITION_TITLE, Keys.POSITION_SENIORITY},
-        "framework": {
-            Keys.LOCATION_CITY,
-            Keys.EMPLOYMENT_TYPE,
-            Keys.EMPLOYMENT_CONTRACT,
-            Keys.EMPLOYMENT_START,
-        },
-        "benefits": {Keys.BENEFITS_ITEMS},
-        "tasks": {Keys.RESPONSIBILITIES},
-        "skills": {Keys.HARD_REQ, Keys.SOFT_REQ, Keys.LANG_REQ, Keys.TOOLS},
-        "process": set(),
-        "intake": set(),
-        "review": set(),
-    }
-    return mapping.get(step, set())
-
+            primary.append(q)
+    # Limit primary questions to avoid overwhelming the user
+    if len(primary) > MAX_PRIMARY_QUESTIONS_PER_STEP:
+        primary = primary[:MAX_PRIMARY_QUESTIONS_PER_STEP]
+        advanced = [q for q in qs if q not in primary]
+    return primary, advanced
 
 def missing_required_for_step(profile: dict[str, Any], step: str) -> list[str]:
-    reqs = required_fields_for_step(step)
-    return [p for p in sorted(reqs) if is_missing(profile, p)]
+    """Return list of required field labels missing in the current step."""
+    labels: list[str] = []
+    for q in question_bank():
+        if q.step == step and q.required and is_missing(profile, q.path):
+            # Return the label in UI language (German by default)
+            labels.append(q.label_de if profile.get("meta", {}).get("ui_language") == LANG_DE else q.label_en)
+    return labels
 
-
-def iter_missing_optional(
-    profile: dict[str, Any], candidates: Iterable[Question]
-) -> list[str]:
+def iter_missing_optional(profile: dict[str, Any], questions: list[Question]) -> list[str]:
+    """Return list of paths for optional questions (in given list) that are currently empty."""
     out: list[str] = []
-    for q in candidates:
-        if q.path in REQUIRED_FIELDS:
+    for q in questions:
+        if q.required:
             continue
-        if is_missing(profile, q.path) or _is_low_conf(profile, q.path):
+        if is_missing(profile, q.path):
             out.append(q.path)
-    seen = set()
-    uniq: list[str] = []
-    for p in out:
-        if p in seen:
-            continue
-        seen.add(p)
-        uniq.append(p)
-    return uniq
+    return out
+
+def question_label(q: Question, lang: str) -> str:
+    return q.label_de if lang == LANG_DE else q.label_en or q.label_de
+
+def question_help(q: Question, lang: str) -> str:
+    return q.help_de if lang == LANG_DE else q.help_en or q.help_de
