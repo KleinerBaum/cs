@@ -66,6 +66,7 @@ SS_AI_FOLLOWUPS = "ai_followups"
 SS_TRANSLATED = "translated_once"
 SS_JOB_AD_DRAFT = "job_ad_draft"
 SS_THEME = "ui_theme"
+SS_PENDING_ESCO_HARD_REQ = "pending_esco_hard_req"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
@@ -105,6 +106,8 @@ def _init_state() -> None:
         st.session_state[SS_JOB_AD_DRAFT] = ""
     if SS_THEME not in st.session_state:
         st.session_state[SS_THEME] = THEME_LIGHT
+    if SS_PENDING_ESCO_HARD_REQ not in st.session_state:
+        st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
 
 
 def _reset_session() -> None:
@@ -229,6 +232,26 @@ def _apply_theme(theme: str) -> None:
 
     css = css_dark if theme == THEME_DARK else css_light
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+def _guess_text_language(text: str, fallback: str) -> str:
+    """Return a rough language guess ("de" or "en") for ESCO queries."""
+
+    lowered = text.lower()
+    if any(ch in lowered for ch in ("ä", "ö", "ü", "ß")):
+        return LANG_DE
+
+    german_markers = (
+        " für ",
+        " mit ",
+        " und ",
+        "kenntnisse",
+        "erfahrung",
+    )
+    if any(marker in lowered for marker in german_markers):
+        return LANG_DE
+
+    return LANG_DE if fallback == LANG_DE else LANG_EN
 
 
 def run_app() -> None:
@@ -503,6 +526,9 @@ def _render_questions_step(
 ) -> None:
     st.markdown(f"## {t(lang, _STEP_LABEL_KEYS.get(step, step))}")
 
+    if step == "skills":
+        _apply_pending_esco_skills(profile, lang=lang)
+
     missing_step = missing_required_for_step(profile, step)
     if missing_step:
         st.info(f"{t(lang, 'step.missing_in_step')}: {', '.join(missing_step)}")
@@ -671,6 +697,35 @@ def _render_question_list(
                 key=widget_key,
                 on_change=partial(_on_widget_change, q.path, "text", widget_key),
             )
+
+
+def _queue_esco_skills(skills: list[str]) -> None:
+    st.session_state[SS_PENDING_ESCO_HARD_REQ] = skills
+
+
+def _apply_pending_esco_skills(profile: dict[str, Any], *, lang: str) -> None:
+    pending = st.session_state.get(SS_PENDING_ESCO_HARD_REQ) or []
+    if not pending:
+        return
+
+    cleaned = [str(s).strip() for s in pending if str(s).strip()]
+    st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
+    if not cleaned:
+        return
+
+    widget_key = "w__skills__hard_req"
+    st.session_state[widget_key] = list_to_multiline(cleaned)
+
+    set_field(
+        profile,
+        Keys.HARD_REQ,
+        cleaned,
+        provenance="ai_suggestion",
+        confidence=0.7,
+        evidence="esco_skill_apply",
+    )
+    st.session_state[SS_PROFILE] = profile
+    st.success(t(lang, "esco.apply_success"))
 
 
 def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
@@ -842,16 +897,20 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
     default_query = str(get_value(profile, Keys.POSITION_TITLE) or "").strip()
     query = st.text_input(t(lang, "esco.query"), value=default_query, key="esco_query")
 
+    query_lang = _guess_text_language(query, LANG_DE if lang == LANG_DE else LANG_EN)
+
     col1, col2 = st.columns([1, 2])
     with col1:
         do_search = st.button(t(lang, "ui.esco_search"), key="esco_search_btn")
     with col2:
-        st.caption(t(lang, "esco.caption"))
+        st.caption(
+            f"{t(lang, 'esco.caption')} · {t(lang, 'esco.lang_hint').format(query_lang)}"
+        )
 
     if do_search and query:
         try:
             results = search_occupations(
-                query, language=("de" if lang == LANG_DE else "en"), limit=10
+                query, language=query_lang, limit=10
             )
             st.session_state["esco_results"] = results
         except ESCOError as e:
@@ -888,11 +947,17 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
         if st.button(t(lang, "ui.esco_apply_skills"), key="esco_apply_btn"):
             try:
                 skills = occupation_related_skills(
-                    picked["uri"],
-                    language=("de" if lang == LANG_DE else "en"),
-                    max_items=25,
+                    picked["uri"], language=query_lang, max_items=25
                 )
                 st.session_state["esco_skills"] = skills
+                set_field(
+                    profile,
+                    Keys.ESCO_SUGGESTED_SKILLS,
+                    skills,
+                    provenance="ai_suggestion",
+                    confidence=0.7,
+                    evidence="esco_skill_lookup",
+                )
             except ESCOError as e:
                 st.error(f"{t(lang, 'esco.error')}: {e}")
                 st.session_state["esco_skills"] = []
@@ -905,23 +970,16 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
             default=skills[:8],
             key="esco_skills_select",
         )
+        st.button(
+            t(lang, "ui.esco_insert_hard"),
+            key="esco_insert_btn",
+            disabled=not selected,
+            on_click=_queue_esco_skills,
+            args=(selected,),
+            type="primary",
+        )
         if selected:
-            existing = get_value(profile, Keys.HARD_OPT) or []
-            existing_list = (
-                existing
-                if isinstance(existing, list)
-                else multiline_to_list(str(existing))
-            )
-            merged = existing_list + [s for s in selected if s not in existing_list]
-            set_field(
-                profile,
-                Keys.HARD_OPT,
-                merged,
-                provenance="ai_suggestion",
-                confidence=0.65,
-                evidence="esco_skill_merge",
-            )
-            st.success(t(lang, "esco.merge_success"))
+            st.caption(t(lang, "esco.apply_hint"))
 
 
 def _translate_fields_to_english(
