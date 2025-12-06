@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from cogstaff.constants.profile_paths import P
 from cogstaff.schema.profile_document import NeedAnalysisProfileDocument
-from cogstaff.wizard.question_engine import I18nText, NeedEval, QuestionSpec, evaluate_paths
+from cogstaff.wizard.question_engine import (
+    I18nText,
+    NeedEval,
+    QuestionSpec,
+    evaluate_paths,
+)
 from cogstaff.wizard.steps import StepId
 
 
@@ -41,7 +46,10 @@ CATALOG: list[QuestionSpec] = [
         step=StepId.COMPANY,
         paths=(P.COMPANY_NAME.value,),
         label=I18nText("Unternehmensname", "Company name"),
-        help=I18nText("Wie heißt das Unternehmen/der Arbeitgeber?", "What is the employer/company name?"),
+        help=I18nText(
+            "Wie heißt das Unternehmen/der Arbeitgeber?",
+            "What is the employer/company name?",
+        ),
         widget="text",
         required=True,
         level="core",
@@ -80,7 +88,6 @@ CATALOG: list[QuestionSpec] = [
         widget="text",
         level="detail",
     ),
-
     # ---------------- TEAM ----------------
     QuestionSpec(
         id="team.department",
@@ -125,7 +132,6 @@ CATALOG: list[QuestionSpec] = [
         level="standard",
         show_if=lambda doc: bool(doc.profile.position.people_management),
     ),
-
     # ---------------- CONDITIONS (Vacancy frame) ----------------
     QuestionSpec(
         id="position.title",
@@ -141,7 +147,9 @@ CATALOG: list[QuestionSpec] = [
         step=StepId.CONDITIONS,
         paths=(P.LOCATION_WORK_POLICY.value,),
         label=I18nText("Arbeitsmodell", "Work policy"),
-        help=I18nText("Onsite / Hybrid / Remote / Flexibel", "Onsite / Hybrid / Remote / Flexible"),
+        help=I18nText(
+            "Onsite / Hybrid / Remote / Flexibel", "Onsite / Hybrid / Remote / Flexible"
+        ),
         widget="select",
         required=True,
         level="core",
@@ -162,7 +170,9 @@ CATALOG: list[QuestionSpec] = [
         step=StepId.CONDITIONS,
         paths=(P.LOCATION_REMOTE_SCOPE.value,),
         label=I18nText("Remote-Geltungsbereich", "Remote scope"),
-        help=I18nText("z.B. Deutschland / EU / weltweit", "e.g. Germany only / EU / worldwide"),
+        help=I18nText(
+            "z.B. Deutschland / EU / weltweit", "e.g. Germany only / EU / worldwide"
+        ),
         widget="text",
         level="standard",
         show_if=show_remote_related,
@@ -183,7 +193,16 @@ CATALOG: list[QuestionSpec] = [
         paths=(P.EMPLOYMENT_TYPE.value,),
         label=I18nText("Beschäftigungsart", "Employment type"),
         widget="select",
-        options=("permanent", "temporary", "contractor", "freelance", "internship", "apprenticeship", "other", "unknown"),
+        options=(
+            "permanent",
+            "temporary",
+            "contractor",
+            "freelance",
+            "internship",
+            "apprenticeship",
+            "other",
+            "unknown",
+        ),
         level="standard",
     ),
     QuestionSpec(
@@ -259,7 +278,6 @@ CATALOG: list[QuestionSpec] = [
         level="detail",
         show_if=show_salary_fields,
     ),
-
     # ---------------- TASKS ----------------
     QuestionSpec(
         id="position.summary",
@@ -279,7 +297,6 @@ CATALOG: list[QuestionSpec] = [
         required=True,
         level="core",
     ),
-
     # ---------------- SKILLS ----------------
     QuestionSpec(
         id="skills.hard_req",
@@ -318,11 +335,12 @@ CATALOG: list[QuestionSpec] = [
         id="skills.must_not",
         step=StepId.SKILLS,
         paths=(P.MUST_NOT.value,),
-        label=I18nText("Ausschlusskriterien (Dealbreaker)", "Dealbreakers (must-not-haves)"),
+        label=I18nText(
+            "Ausschlusskriterien (Dealbreaker)", "Dealbreakers (must-not-haves)"
+        ),
         widget="list_text",
         level="detail",
     ),
-
     # ---------------- BENEFITS ----------------
     QuestionSpec(
         id="benefits.items",
@@ -332,7 +350,6 @@ CATALOG: list[QuestionSpec] = [
         widget="list_text",
         level="standard",
     ),
-
     # ---------------- PROCESS ----------------
     QuestionSpec(
         id="process.stages",

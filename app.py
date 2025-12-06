@@ -1,10 +1,11 @@
 # app.py - Streamlit application
 import streamlit as st
 import openai
-from fields import *
 from esco_utils import fetch_essential_skills
 
-st.set_page_config(page_title="Job Description Generator", page_icon="📝", layout="wide")
+st.set_page_config(
+    page_title="Job Description Generator", page_icon="📝", layout="wide"
+)
 
 st.title("Job Description Generator")
 st.markdown(
@@ -20,7 +21,9 @@ if api_key:
     openai.api_key = api_key
 
 # LLM model to use
-MODEL_NAME = "gpt-3.5-turbo"  # Standardmodell (GPT-5-mini alias gemäß OpenAI-Dokumentation)
+MODEL_NAME = (
+    "gpt-3.5-turbo"  # Standardmodell (GPT-5-mini alias gemäß OpenAI-Dokumentation)
+)
 
 # --- Company section ---
 st.header("Unternehmen")
@@ -30,37 +33,65 @@ company_industry = st.text_input("Branche", key="company_industry")
 company_size = st.text_input("Unternehmensgröße", key="company_size")
 company_hq = st.text_input("Hauptsitz (Ort)", key="company_hq")
 company_desc = st.text_area("Kurzbeschreibung des Unternehmens", key="company_desc")
-company_contact_name = st.text_input("Ansprechperson (Name)", key="company_contact_name")
-company_contact_email = st.text_input("Ansprechperson (E-Mail, Pflicht)", key="company_contact_email")
+company_contact_name = st.text_input(
+    "Ansprechperson (Name)", key="company_contact_name"
+)
+company_contact_email = st.text_input(
+    "Ansprechperson (E-Mail, Pflicht)", key="company_contact_email"
+)
 
 # --- Position / Team section ---
 st.header("Position und Team")
 position_title = st.text_input("Stellentitel (Englisch, Pflicht)", key="position_title")
 position_family = st.text_input("Job-Familie / Berufsfeld", key="position_family")
-position_seniority = st.text_input("Senioritätslevel (Pflicht)", key="position_seniority")
-position_summary = st.text_area("Rollenbeschreibung / Aufgabenüberblick", key="position_summary")
+position_seniority = st.text_input(
+    "Senioritätslevel (Pflicht)", key="position_seniority"
+)
+position_summary = st.text_area(
+    "Rollenbeschreibung / Aufgabenüberblick", key="position_summary"
+)
 position_reports_to = st.text_input("Vorgesetzte Position", key="position_reports_to")
-position_people_mgmt = st.text_input("Verantwortung (Teamleitung)", key="position_people_mgmt")
-position_direct_reports = st.text_input("Direkt unterstellte Mitarbeiter (Anzahl)", key="position_direct_reports")
+position_people_mgmt = st.text_input(
+    "Verantwortung (Teamleitung)", key="position_people_mgmt"
+)
+position_direct_reports = st.text_input(
+    "Direkt unterstellte Mitarbeiter (Anzahl)", key="position_direct_reports"
+)
 team_dept = st.text_input("Abteilung", key="team_dept")
 team_name = st.text_input("Teamname", key="team_name")
-team_reporting_line = st.text_input("Übergeordnete Struktur / Reporting Line", key="team_reporting_line")
-team_headcount_current = st.text_input("Aktuelle Teamgröße", key="team_headcount_current")
+team_reporting_line = st.text_input(
+    "Übergeordnete Struktur / Reporting Line", key="team_reporting_line"
+)
+team_headcount_current = st.text_input(
+    "Aktuelle Teamgröße", key="team_headcount_current"
+)
 team_headcount_target = st.text_input("Geplante Teamgröße", key="team_headcount_target")
 team_tools = st.text_input("Kollaborationstools im Team", key="team_tools")
 
 # --- Location / Employment section ---
 st.header("Standort und Anstellung")
-location_work_policy = st.text_input("Arbeitsmodell (z.B. vor Ort, Hybrid, Remote)", key="location_work_policy")
+location_work_policy = st.text_input(
+    "Arbeitsmodell (z.B. vor Ort, Hybrid, Remote)", key="location_work_policy"
+)
 location_city = st.text_input("Dienstsitz / Ort (Pflicht)", key="location_city")
-location_remote_scope = st.text_input("Remote-Anteil / -Möglichkeiten", key="location_remote_scope")
+location_remote_scope = st.text_input(
+    "Remote-Anteil / -Möglichkeiten", key="location_remote_scope"
+)
 location_timezone = st.text_input("Zeitzonenanforderungen", key="location_timezone")
-location_travel_required = st.text_input("Reisetätigkeit erforderlich?", key="location_travel_required")
+location_travel_required = st.text_input(
+    "Reisetätigkeit erforderlich?", key="location_travel_required"
+)
 location_travel_pct = st.text_input("Reiseanteil (%)", key="location_travel_pct")
-employment_type = st.text_input("Anstellungsart (Pflicht, z.B. Vollzeit/Teilzeit)", key="employment_type")
-employment_contract = st.text_input("Vertragsart (Pflicht, z.B. unbefristet)", key="employment_contract")
+employment_type = st.text_input(
+    "Anstellungsart (Pflicht, z.B. Vollzeit/Teilzeit)", key="employment_type"
+)
+employment_contract = st.text_input(
+    "Vertragsart (Pflicht, z.B. unbefristet)", key="employment_contract"
+)
 employment_start = st.text_input("Startdatum (Pflicht)", key="employment_start")
-employment_visa = st.text_input("Visa-Sponsoring / Arbeitserlaubnis", key="employment_visa")
+employment_visa = st.text_input(
+    "Visa-Sponsoring / Arbeitserlaubnis", key="employment_visa"
+)
 
 # --- Compensation / Benefits section ---
 st.header("Vergütung und Benefits")
@@ -68,13 +99,22 @@ salary_provided = st.text_input("Gehalt angegeben? (Ja/Nein)", key="salary_provi
 salary_min = st.text_input("Gehaltsspanne Minimum", key="salary_min")
 salary_max = st.text_input("Gehaltsspanne Maximum", key="salary_max")
 salary_currency = st.text_input("Währung (z.B. EUR)", key="salary_currency")
-salary_period = st.text_input("Zeitraum des Gehalts (z.B. jährlich)", key="salary_period")
-benefits_items = st.text_area("Benefits (Pflicht - eine pro Zeile)", key="benefits_items")
+salary_period = st.text_input(
+    "Zeitraum des Gehalts (z.B. jährlich)", key="salary_period"
+)
+benefits_items = st.text_area(
+    "Benefits (Pflicht - eine pro Zeile)", key="benefits_items"
+)
 
 # --- Responsibilities / Requirements section ---
 st.header("Aufgaben und Anforderungen")
-responsibilities_items = st.text_area("Aufgaben / Verantwortlichkeiten (Pflicht - eine pro Zeile)", key="responsibilities_items")
-hard_req = st.text_area("Fachliche Anforderungen (Pflicht - Englisch, eine pro Zeile)", key="hard_req")
+responsibilities_items = st.text_area(
+    "Aufgaben / Verantwortlichkeiten (Pflicht - eine pro Zeile)",
+    key="responsibilities_items",
+)
+hard_req = st.text_area(
+    "Fachliche Anforderungen (Pflicht - Englisch, eine pro Zeile)", key="hard_req"
+)
 if st.button("Typische Hard Skills vorschlagen (ESCO)"):
     if not position_title or not position_title.strip():
         st.warning("Bitte zuerst einen Stellentitel eingeben.")
@@ -86,17 +126,27 @@ if st.button("Typische Hard Skills vorschlagen (ESCO)"):
         else:
             st.warning("Keine passenden Skills in ESCO gefunden.")
 hard_opt = st.text_area("Optionale Hard Skills (eine pro Zeile)", key="hard_opt")
-soft_req = st.text_area("Soft Skills (Pflicht - Englisch, eine pro Zeile)", key="soft_req")
+soft_req = st.text_area(
+    "Soft Skills (Pflicht - Englisch, eine pro Zeile)", key="soft_req"
+)
 lang_req = st.text_area("Sprachkenntnisse (Pflicht - eine pro Zeile)", key="lang_req")
-tools_req = st.text_area("Tools & Technologien (Pflicht - Englisch, eine pro Zeile)", key="tools_req")
-must_not = st.text_area("Ausschlusskriterien (optional - eine pro Zeile)", key="must_not")
+tools_req = st.text_area(
+    "Tools & Technologien (Pflicht - Englisch, eine pro Zeile)", key="tools_req"
+)
+must_not = st.text_area(
+    "Ausschlusskriterien (optional - eine pro Zeile)", key="must_not"
+)
 
 # --- Recruiting process section ---
 st.header("Bewerbungsprozess")
 process_stages = st.text_area("Interviewphasen (eine pro Zeile)", key="process_stages")
-process_instructions = st.text_area("Bewerbungsanweisungen / Hinweise", key="process_instructions")
+process_instructions = st.text_area(
+    "Bewerbungsanweisungen / Hinweise", key="process_instructions"
+)
 process_contact = st.text_input("Kontakt für Bewerbung (E-Mail)", key="process_contact")
-process_timeline = st.text_input("Geplanter Auswahlzeitraum / Timeline", key="process_timeline")
+process_timeline = st.text_input(
+    "Geplanter Auswahlzeitraum / Timeline", key="process_timeline"
+)
 
 # --- Generate job description using OpenAI LLM ---
 if st.button("Stellenanzeige generieren"):
@@ -136,6 +186,7 @@ if st.button("Stellenanzeige generieren"):
     if missing:
         st.error("Bitte füllen Sie alle Pflichtfelder aus: " + ", ".join(missing))
         st.stop()
+
     # Parse multiline inputs into lists
     def parse_list(text: str):
         if not text:
@@ -167,7 +218,9 @@ if st.button("Stellenanzeige generieren"):
         prompt_lines.append(f"Hauptsitz: {company_hq.strip()}")
     if company_desc:
         prompt_lines.append(f"Unternehmensbeschreibung: {company_desc.strip()}")
-    prompt_lines.append(f"Position: {position_title.strip()} (Seniorität: {position_seniority.strip()})")
+    prompt_lines.append(
+        f"Position: {position_title.strip()} (Seniorität: {position_seniority.strip()})"
+    )
     if position_family:
         prompt_lines.append(f"Job-Familie: {position_family.strip()}")
     if position_reports_to:
@@ -176,7 +229,14 @@ if st.button("Stellenanzeige generieren"):
         prompt_lines.append(f"Führungsverantwortung: {position_people_mgmt.strip()}")
     if position_direct_reports:
         prompt_lines.append(f"Direkt unterstellte: {position_direct_reports.strip()}")
-    if team_dept or team_name or team_reporting_line or team_headcount_current or team_headcount_target or team_tools:
+    if (
+        team_dept
+        or team_name
+        or team_reporting_line
+        or team_headcount_current
+        or team_headcount_target
+        or team_tools
+    ):
         prompt_lines.append("Team:")
         if team_dept:
             prompt_lines.append(f"- Abteilung: {team_dept.strip()}")
@@ -185,9 +245,13 @@ if st.button("Stellenanzeige generieren"):
         if team_reporting_line:
             prompt_lines.append(f"- Übergeordnet: {team_reporting_line.strip()}")
         if team_headcount_current:
-            prompt_lines.append(f"- Aktuelle Teamgröße: {team_headcount_current.strip()}")
+            prompt_lines.append(
+                f"- Aktuelle Teamgröße: {team_headcount_current.strip()}"
+            )
         if team_headcount_target:
-            prompt_lines.append(f"- Geplante Teamgröße: {team_headcount_target.strip()}")
+            prompt_lines.append(
+                f"- Geplante Teamgröße: {team_headcount_target.strip()}"
+            )
         if team_tools:
             prompt_lines.append(f"- Tools im Team: {team_tools.strip()}")
     prompt_lines.append(f"Einsatzort: {location_city.strip()}")
@@ -208,7 +272,11 @@ if st.button("Stellenanzeige generieren"):
         prompt_lines.append(f"Visa/Arbeitserlaubnis: {employment_visa.strip()}")
     if salary_provided and salary_provided.strip().lower() in ["ja", "yes"]:
         if salary_min or salary_max:
-            range_text = (salary_min.strip() if salary_min else "?") + " - " + (salary_max.strip() if salary_max else "?")
+            range_text = (
+                (salary_min.strip() if salary_min else "?")
+                + " - "
+                + (salary_max.strip() if salary_max else "?")
+            )
             if salary_currency:
                 range_text += " " + salary_currency.strip()
             if salary_period:
@@ -255,19 +323,21 @@ if st.button("Stellenanzeige generieren"):
             prompt_lines.append(f"  Zeitrahmen: {process_timeline.strip()}")
     prompt = "\n".join(prompt_lines)
     messages = [
-        {"role": "system", "content": "Du bist ein erfahrener HR-Experte und schreibst professionelle Stellenanzeigen auf Deutsch."},
-        {"role": "user", "content": prompt}
+        {
+            "role": "system",
+            "content": "Du bist ein erfahrener HR-Experte und schreibst professionelle Stellenanzeigen auf Deutsch.",
+        },
+        {"role": "user", "content": prompt},
     ]
     try:
         response = openai.ChatCompletion.create(
-            model=MODEL_NAME,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1024
+            model=MODEL_NAME, messages=messages, temperature=0.7, max_tokens=1024
         )
         job_ad = response["choices"][0]["message"]["content"].strip()
         st.subheader("Generierte Stellenanzeige:")
         st.markdown(job_ad)
-        st.download_button("Als Textdatei herunterladen", job_ad, file_name="Stellenanzeige.txt")
+        st.download_button(
+            "Als Textdatei herunterladen", job_ad, file_name="Stellenanzeige.txt"
+        )
     except Exception as e:
         st.error(f"Fehler bei der Generierung: {e}")

@@ -8,7 +8,7 @@ from docx import Document
 from .i18n import LANG_DE, option_label
 from .keys import Keys
 from .profile import get_value, is_missing
-from .utils import list_to_multiline, multiline_to_list, normalize_space
+from .utils import multiline_to_list, normalize_space
 
 
 def _as_list(value: Any) -> list[str]:
@@ -30,7 +30,9 @@ def _title_for_lang(profile: dict, lang: str) -> str:
     return str(v).strip()
 
 
-def _list_for_lang(profile: dict, lang: str, preferred_path: str, fallback_path: str) -> list[str]:
+def _list_for_lang(
+    profile: dict, lang: str, preferred_path: str, fallback_path: str
+) -> list[str]:
     if lang != LANG_DE:
         v = get_value(profile, preferred_path)
         if v is not None and not is_missing(profile, preferred_path):
@@ -52,15 +54,21 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
     role_summary = str(get_value(profile, Keys.POSITION_SUMMARY) or "").strip()
 
     work_policy = get_value(profile, Keys.LOCATION_WORK_POLICY)
-    work_policy_lbl = option_label(lang, "work_policy", str(work_policy)) if work_policy else ""
+    work_policy_lbl = (
+        option_label(lang, "work_policy", str(work_policy)) if work_policy else ""
+    )
     city = str(get_value(profile, Keys.LOCATION_CITY) or "").strip()
     remote_scope = str(get_value(profile, Keys.LOCATION_REMOTE_SCOPE) or "").strip()
     tz = str(get_value(profile, Keys.LOCATION_TZ) or "").strip()
 
     emp_type = get_value(profile, Keys.EMPLOYMENT_TYPE)
-    emp_type_lbl = option_label(lang, "employment_type", str(emp_type)) if emp_type else ""
+    emp_type_lbl = (
+        option_label(lang, "employment_type", str(emp_type)) if emp_type else ""
+    )
     contract = get_value(profile, Keys.EMPLOYMENT_CONTRACT)
-    contract_lbl = option_label(lang, "contract_type", str(contract)) if contract else ""
+    contract_lbl = (
+        option_label(lang, "contract_type", str(contract)) if contract else ""
+    )
     start_date = str(get_value(profile, Keys.EMPLOYMENT_START) or "").strip()
 
     salary_provided = bool(get_value(profile, Keys.SALARY_PROVIDED))
@@ -83,7 +91,10 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
     stages = _as_list(get_value(profile, Keys.PROCESS_STAGES))
     timeline = str(get_value(profile, Keys.PROCESS_TIMELINE) or "").strip()
     instructions = str(get_value(profile, Keys.PROCESS_INSTRUCTIONS) or "").strip()
-    contact = str(get_value(profile, Keys.PROCESS_CONTACT) or "").strip() or str(get_value(profile, Keys.COMPANY_CONTACT_EMAIL) or "").strip()
+    contact = (
+        str(get_value(profile, Keys.PROCESS_CONTACT) or "").strip()
+        or str(get_value(profile, Keys.COMPANY_CONTACT_EMAIL) or "").strip()
+    )
 
     if lang == LANG_DE:
         h_company = "Über das Unternehmen"
@@ -202,7 +213,11 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
         if timeline:
             md.append(f"- Timeline: {timeline}")
         if instructions:
-            md.append("\n" + instructions if not instructions.startswith("-") else instructions)
+            md.append(
+                "\n" + instructions
+                if not instructions.startswith("-")
+                else instructions
+            )
         md.append("")
 
     if apply_line:
@@ -210,7 +225,12 @@ def render_job_ad_markdown(profile: dict, lang: str) -> str:
         md.append(apply_line)
 
     return "\n".join(
-        [normalize_space(line) if line and not line.startswith("-") and not line.startswith("#") else line for line in md]
+        [
+            normalize_space(line)
+            if line and not line.startswith("-") and not line.startswith("#")
+            else line
+            for line in md
+        ]
     ).strip()
 
 
@@ -221,7 +241,9 @@ def _bullets(items: Iterable[str], empty_fallback: str | None = None) -> list[st
     return [f"- {x}" for x in clean]
 
 
-def export_docx_bytes(profile: dict, lang: str, markdown_override: str | None = None) -> bytes:
+def export_docx_bytes(
+    profile: dict, lang: str, markdown_override: str | None = None
+) -> bytes:
     """Create a basic DOCX export (editable)."""
     doc = Document()
 

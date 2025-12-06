@@ -19,9 +19,16 @@ def _headers(language: str | None) -> dict[str, str]:
     return h
 
 
-def _get(url: str, params: dict[str, Any] | None = None, language: str | None = None) -> dict[str, Any]:
+def _get(
+    url: str, params: dict[str, Any] | None = None, language: str | None = None
+) -> dict[str, Any]:
     try:
-        resp = requests.get(url, params=params or {}, headers=_headers(language), timeout=REQUEST_TIMEOUT_S)
+        resp = requests.get(
+            url,
+            params=params or {},
+            headers=_headers(language),
+            timeout=REQUEST_TIMEOUT_S,
+        )
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -58,7 +65,16 @@ def _extract_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(payload.get("results"), list):
         return payload["results"]
     emb = payload.get("_embedded") or {}
-    for key in ("results", "result", "occupations", "occupation", "skills", "skill", "concepts", "concept"):
+    for key in (
+        "results",
+        "result",
+        "occupations",
+        "occupation",
+        "skills",
+        "skill",
+        "concepts",
+        "concept",
+    ):
         if isinstance(emb.get(key), list):
             return emb[key]
     for v in emb.values():
@@ -67,9 +83,17 @@ def _extract_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
-def search_occupations(query: str, language: str = "en", limit: int = 10, offset: int = 0) -> list[dict[str, str]]:
+def search_occupations(
+    query: str, language: str = "en", limit: int = 10, offset: int = 0
+) -> list[dict[str, str]]:
     url = f"{ESCO_BASE_URL}/search"
-    params = {"text": query, "type": "occupation", "language": language, "limit": limit, "offset": offset}
+    params = {
+        "text": query,
+        "type": "occupation",
+        "language": language,
+        "limit": limit,
+        "offset": offset,
+    }
     data = _get(url, params=params, language=language)
     results = _extract_results(data)
     out: list[dict[str, str]] = []
@@ -83,9 +107,17 @@ def search_occupations(query: str, language: str = "en", limit: int = 10, offset
     return out
 
 
-def search_skills(query: str, language: str = "en", limit: int = 15, offset: int = 0) -> list[dict[str, str]]:
+def search_skills(
+    query: str, language: str = "en", limit: int = 15, offset: int = 0
+) -> list[dict[str, str]]:
     url = f"{ESCO_BASE_URL}/search"
-    params = {"text": query, "type": "skill", "language": language, "limit": limit, "offset": offset}
+    params = {
+        "text": query,
+        "type": "skill",
+        "language": language,
+        "limit": limit,
+        "offset": offset,
+    }
     data = _get(url, params=params, language=language)
     results = _extract_results(data)
     out: list[dict[str, str]] = []
@@ -104,14 +136,18 @@ def get_occupation(uri: str, language: str = "en") -> dict[str, Any]:
     return _get(url, params={"uri": uri, "language": language}, language=language)
 
 
-def _fetch_hal_collection(href: str, language: str = "en", limit: int = 50) -> list[dict[str, Any]]:
+def _fetch_hal_collection(
+    href: str, language: str = "en", limit: int = 50
+) -> list[dict[str, Any]]:
     if href.startswith("/"):
         href = ESCO_BASE_URL.rstrip("/") + href
     data = _get(href, params={"limit": limit}, language=language)
     return _extract_results(data)
 
 
-def occupation_related_skills(occupation_uri: str, language: str = "en", max_items: int = 25) -> list[str]:
+def occupation_related_skills(
+    occupation_uri: str, language: str = "en", max_items: int = 25
+) -> list[str]:
     occ = get_occupation(occupation_uri, language=language)
     skills: list[str] = []
 

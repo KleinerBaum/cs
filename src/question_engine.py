@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
-from .i18n import LANG_DE, LANG_EN
+from .i18n import LANG_DE
 from .keys import (
     CONTRACT_TYPE_VALUES,
     EMPLOYMENT_TYPE_VALUES,
@@ -144,7 +144,6 @@ def question_bank() -> list[Question]:
             label_de="Kontaktperson (E-Mail)*",
             label_en="Contact email*",
         ),
-
         # --- Team
         Question(
             id="team_dept",
@@ -199,7 +198,6 @@ def question_bank() -> list[Question]:
             label_en="Collaboration tools",
             advanced=True,
         ),
-
         # --- Position
         Question(
             id="position_title",
@@ -277,7 +275,6 @@ def question_bank() -> list[Question]:
             advanced=True,
             show_if=_people_mgmt,
         ),
-
         # --- Framework: location & employment
         Question(
             id="work_policy",
@@ -383,7 +380,6 @@ def question_bank() -> list[Question]:
             label_en="Visa sponsorship available?",
             advanced=True,
         ),
-
         # --- Benefits / Compensation
         Question(
             id="salary_provided",
@@ -445,7 +441,6 @@ def question_bank() -> list[Question]:
             label_de="Benefits* (je Zeile 1 Punkt)",
             label_en="Benefits* (one per line)",
         ),
-
         # --- Responsibilities
         Question(
             id="responsibilities_items",
@@ -456,7 +451,6 @@ def question_bank() -> list[Question]:
             label_de="Aufgaben* (je Zeile 1 Punkt)",
             label_en="Responsibilities* (one per line)",
         ),
-
         # --- Requirements
         Question(
             id="hard_req",
@@ -541,7 +535,6 @@ def question_bank() -> list[Question]:
             label_en="Must-not-haves",
             advanced=True,
         ),
-
         # --- Recruiting process
         Question(
             id="process_stages",
@@ -603,7 +596,9 @@ def _is_low_conf(profile: dict[str, Any], path: str) -> bool:
     return conf is not None and conf < LOW_CONFIDENCE_THRESHOLD
 
 
-def select_questions_for_step(profile: dict[str, Any], step: str) -> tuple[list[Question], list[Question]]:
+def select_questions_for_step(
+    profile: dict[str, Any], step: str
+) -> tuple[list[Question], list[Question]]:
     """Return (primary, more_details) questions for a step."""
     qs = [q for q in question_bank() if q.step == step]
 
@@ -654,7 +649,12 @@ def required_fields_for_step(step: str) -> set[str]:
     mapping = {
         "company": {Keys.COMPANY_NAME, Keys.COMPANY_CONTACT_EMAIL},
         "team": {Keys.POSITION_TITLE, Keys.POSITION_SENIORITY},
-        "framework": {Keys.LOCATION_CITY, Keys.EMPLOYMENT_TYPE, Keys.EMPLOYMENT_CONTRACT, Keys.EMPLOYMENT_START},
+        "framework": {
+            Keys.LOCATION_CITY,
+            Keys.EMPLOYMENT_TYPE,
+            Keys.EMPLOYMENT_CONTRACT,
+            Keys.EMPLOYMENT_START,
+        },
         "benefits": {Keys.BENEFITS_ITEMS},
         "tasks": {Keys.RESPONSIBILITIES},
         "skills": {Keys.HARD_REQ, Keys.SOFT_REQ, Keys.LANG_REQ, Keys.TOOLS},
@@ -670,7 +670,9 @@ def missing_required_for_step(profile: dict[str, Any], step: str) -> list[str]:
     return [p for p in sorted(reqs) if is_missing(profile, p)]
 
 
-def iter_missing_optional(profile: dict[str, Any], candidates: Iterable[Question]) -> list[str]:
+def iter_missing_optional(
+    profile: dict[str, Any], candidates: Iterable[Question]
+) -> list[str]:
     out: list[str] = []
     for q in candidates:
         if q.path in REQUIRED_FIELDS:
