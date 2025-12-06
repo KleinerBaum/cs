@@ -59,7 +59,7 @@ from .utils import (
     multiline_to_list,
 )
 
-
+# Session state keys
 SS_PROFILE = "profile"
 SS_STEP = "step"
 SS_SOURCE_DOC = "source_doc"
@@ -78,7 +78,6 @@ THEME_DARK = "dark"
 BACKGROUND_IMAGE_PATH = Path("images/AdobeStock_506577005.jpeg")
 LOGO_IMAGE_PATH = Path("images/animation_pulse_Default_7kigl22lw.gif")
 
-
 _STEP_LABEL_KEYS = {
     "intake": "intake.title",
     "company": "step.company",
@@ -91,8 +90,8 @@ _STEP_LABEL_KEYS = {
     "review": "step.review",
 }
 
-
 def _init_state() -> None:
+    # Initialize session state for multi-step progress
     if SS_STEP not in st.session_state:
         st.session_state[SS_STEP] = "intake"
     if SS_PROFILE not in st.session_state:
@@ -116,8 +115,8 @@ def _init_state() -> None:
     if SS_PENDING_ESCO_HARD_REQ not in st.session_state:
         st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
 
-
 def _reset_session() -> None:
+    # Clear all relevant session keys and restart
     for k in [
         SS_PROFILE,
         SS_STEP,
@@ -133,41 +132,33 @@ def _reset_session() -> None:
         st.session_state.pop(k, None)
     st.rerun()
 
-
 def _get_lang() -> str:
+    # Determine current UI language from session (default to DE)
     return as_lang(st.session_state.get("ui_lang", LANG_DE))
-
 
 def _resolve_api_key() -> str | None:
     """Return the configured OpenAI API key without exposing it in the UI."""
-
     try:
         raw_secrets = st.secrets  # type: ignore[attr-defined]
     except Exception:
         raw_secrets = None
-
     if raw_secrets:
         direct_secret = raw_secrets.get("OPENAI_API_KEY")
         if direct_secret:
             return str(direct_secret)
-
         general_secret = raw_secrets.get("general", {})
         if isinstance(general_secret, dict):
             nested_secret = general_secret.get("OPENAI_API_KEY")
             if nested_secret:
                 return str(nested_secret)
-
     env_key = os.getenv("OPENAI_API_KEY")
     if env_key:
         return env_key
-
     return None
-
 
 def _set_step(step: str) -> None:
     if step in STEPS:
         st.session_state[SS_STEP] = step
-
 
 def _step_index(step: str) -> int:
     try:
@@ -175,20 +166,18 @@ def _step_index(step: str) -> int:
     except ValueError:
         return 0
 
-
 def _go_next() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx < len(STEPS) - 1:
         st.session_state[SS_STEP] = STEPS[idx + 1]
-
 
 def _go_prev() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx > 0:
         st.session_state[SS_STEP] = STEPS[idx - 1]
 
-
 def _apply_theme(theme: str) -> None:
+    # Apply a custom light/dark theme via CSS variables
     css_light = """
     :root {
         --cs-bg: #ffffff;
@@ -207,18 +196,15 @@ def _apply_theme(theme: str) -> None:
         background: var(--cs-surface);
     }
     .stButton>button {
-        color: #ffffff;
-        background: var(--cs-primary);
-        border-color: var(--cs-primary);
+        border-radius: 0.25rem;
     }
     """
-
     css_dark = """
     :root {
-        --cs-bg: #111827;
-        --cs-text: #e5e7eb;
-        --cs-surface: #1f2937;
-        --cs-primary: #60a5fa;
+        --cs-bg: #0f172a;
+        --cs-text: #f8fafc;
+        --cs-surface: #1e293b;
+        --cs-primary: #2563eb;
     }
     body {
         background-color: var(--cs-bg);
@@ -230,136 +216,40 @@ def _apply_theme(theme: str) -> None:
     .stSidebar, .sidebar-content {
         background: var(--cs-surface);
     }
-    .stMarkdown, .stText, .stCaption, label, p, h1, h2, h3, h4, h5, h6 {
-        color: var(--cs-text);
-    }
     .stButton>button {
-        color: #0b1021;
-        background: var(--cs-primary);
-        border-color: var(--cs-primary);
-    }
-    textarea, input, select {
-        background: #111827;
-        color: #e5e7eb;
-        border-color: #374151;
+        border-radius: 0.25rem;
     }
     """
-
-    css = css_dark if theme == THEME_DARK else css_light
-    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
-    st.markdown(
-        f"<script>document.body.dataset.theme='{theme}';</script>",
-        unsafe_allow_html=True,
-    )
-
-
-@lru_cache(maxsize=4)
-def _load_base64_asset(path: str) -> str | None:
-    try:
-        data = Path(path).read_bytes()
-    except OSError:
-        return None
-
-    return base64.b64encode(data).decode("utf-8")
-
+    style = css_light if theme == THEME_LIGHT else css_dark
+    st.write(f"<style>{style}</style>", unsafe_allow_html=True)
 
 def _apply_background(image_path: Path) -> None:
-    encoded = _load_base64_asset(str(image_path))
-    if not encoded:
-        return
-
-    css_template = Template(
-        """
-        .stApp {
-            background-image: linear-gradient(180deg, rgba(17, 24, 39, 0.60) 0%, rgba(17, 24, 39, 0.35) 100%),
-                url('data:image/jpeg;base64,$encoded');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-        }
-
-        .block-container {
-            background: rgba(255, 255, 255, 0.92);
-            border-radius: 18px;
-            padding: 26px 30px;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
-            backdrop-filter: blur(4px);
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            margin-top: 18px;
-        }
-
-        [data-theme="dark"] .block-container {
-            background: rgba(17, 24, 39, 0.86);
-            border-color: rgba(255, 255, 255, 0.12);
-        }
-        """
-    )
-    css = css_template.safe_substitute(encoded=encoded)
-
-    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
-
-
-def _render_branding(logo_path: Path) -> None:
-    encoded = _load_base64_asset(str(logo_path))
-    if not encoded:
-        return
-
-    st.markdown(
-        Template(
-            """
+    # Set a fixed background image (with overlay handled in CSS in the image file itself)
+    if image_path.exists():
+        img_bytes = image_path.read_bytes()
+        encoded = base64.b64encode(img_bytes).decode()
+        st.write(
+            f"""
             <style>
-            .cs-logo-container {
-                position: fixed;
-                top: 1.4rem;
-                right: 1.6rem;
-                padding: 0.85rem 1.1rem;
-                border-radius: 1rem;
-                background: rgba(255, 255, 255, 0.9);
-                box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
-                backdrop-filter: blur(6px);
-                border: 1px solid rgba(255, 255, 255, 0.6);
-                z-index: 999;
-            }
-
-            [data-theme="dark"] .cs-logo-container {
-                background: rgba(26, 32, 44, 0.92);
-                border-color: rgba(255, 255, 255, 0.2);
-            }
-
-            .cs-logo-container img {
-                display: block;
-                max-height: 72px;
-                width: auto;
-            }
+            .stApp {{
+                background: url("data:image/jpeg;base64,{encoded}") center/cover no-repeat;
+            }}
             </style>
-            <div class="cs-logo-container">
-                <img src="data:image/gif;base64,$logo" alt="Animated Need Analysis Wizard logo" />
+            """,
+            unsafe_allow_html=True,
+        )
+
+def _render_branding(image_path: Path) -> None:
+    # Render a small pulsating logo image in the top-right corner
+    if image_path.exists():
+        st.markdown(
+            f"""
+            <div style="position: absolute; top: 1rem; right: 1rem;">
+                <img src="data:image/gif;base64,{base64.b64encode(image_path.read_bytes()).decode()}" alt="Logo">
             </div>
-            """
-        ).safe_substitute(logo=encoded),
-        unsafe_allow_html=True,
-    )
-
-
-def _guess_text_language(text: str, fallback: str) -> str:
-    """Return a rough language guess ("de" or "en") for ESCO queries."""
-
-    lowered = text.lower()
-    if any(ch in lowered for ch in ("ä", "ö", "ü", "ß")):
-        return LANG_DE
-
-    german_markers = (
-        " für ",
-        " mit ",
-        " und ",
-        "kenntnisse",
-        "erfahrung",
-    )
-    if any(marker in lowered for marker in german_markers):
-        return LANG_DE
-
-    return LANG_DE if fallback == LANG_DE else LANG_EN
-
+            """,
+            unsafe_allow_html=True,
+        )
 
 def run_app() -> None:
     st.set_page_config(page_title="Need Analysis Wizard", page_icon="🧭", layout="wide")
@@ -368,12 +258,14 @@ def run_app() -> None:
     lang = _get_lang()
     profile: dict[str, Any] = st.session_state[SS_PROFILE]
 
+    # Resolve API key (from secrets or env) and enforce it
     api_key = _resolve_api_key()
     if not api_key:
         st.error(t(lang, "errors.no_api_key"))
         st.stop()
     api_key = cast(str, api_key)
 
+    # Sidebar controls
     with st.sidebar:
         st.markdown(f"### {t(lang, 'sidebar.title')}")
         ui_lang = st.selectbox(
@@ -390,7 +282,6 @@ def run_app() -> None:
             format_func=lambda x: t(lang, f"theme.{x}"),
             key=SS_THEME,
         )
-
         model = st.text_input(
             t(lang, "sidebar.model"), value=st.session_state[SS_MODEL], key=SS_MODEL
         )
@@ -400,10 +291,10 @@ def run_app() -> None:
         st.session_state[SS_AUTO_AI] = st.checkbox(
             t(lang, "sidebar.auto_ai"), value=st.session_state[SS_AUTO_AI]
         )
-
         if st.button(t(lang, "sidebar.reset")):
             _reset_session()
 
+    # Apply theme and branding
     _apply_theme(st.session_state.get(SS_THEME, THEME_LIGHT))
     _apply_background(BACKGROUND_IMAGE_PATH)
     _render_branding(LOGO_IMAGE_PATH)
@@ -414,12 +305,12 @@ def run_app() -> None:
     missing = missing_required(profile)
     progress = 1.0 - (len(missing) / max(1, len(REQUIRED_FIELDS)))
     st.progress(progress)
-
     if missing:
         st.warning(f"{t(lang, 'progress.missing_required')}: {', '.join(missing)}")
     else:
         st.success(t(lang, "progress.ready"))
 
+    # Top navigation: horizontal radio for steps
     step_labels = {s: t(lang, _STEP_LABEL_KEYS.get(s, s)) for s in STEPS}
     current_step = st.radio(
         " ",
@@ -432,18 +323,16 @@ def run_app() -> None:
     _set_step(current_step)
     current_step = st.session_state[SS_STEP]
 
+    # Prev/Next navigation buttons
     nav_cols = st.columns([1, 6, 1])
     with nav_cols[0]:
-        st.button(
-            t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake"
-        )
+        st.button(t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake")
     with nav_cols[2]:
-        st.button(
-            t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review"
-        )
+        st.button(t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review")
 
     st.divider()
 
+    # Render current step content
     if current_step == "intake":
         _render_intake(profile, api_key=api_key, model=model, lang=lang)
         return
@@ -451,17 +340,11 @@ def run_app() -> None:
         _render_review(profile, lang=lang)
         return
 
-    _render_questions_step(
-        profile, step=current_step, api_key=api_key, model=model, lang=lang
-    )
+    _render_questions_step(profile, step=current_step, api_key=api_key, model=model, lang=lang)
 
-
-def _render_intake(
-    profile: dict[str, Any], *, api_key: str, model: str, lang: str
-) -> None:
+def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: str) -> None:
     st.markdown(f"## {t(lang, 'intake.title')}")
     st.caption(t(lang, "intake.subtitle"))
-
     url = st.text_input(t(lang, "intake.url"), placeholder="https://…")
     upload = st.file_uploader(t(lang, "intake.file"), type=["pdf", "docx"])
     pasted_text = st.text_area(
@@ -469,14 +352,13 @@ def _render_intake(
         placeholder=t(lang, "intake.paste_placeholder"),
         height=200,
     )
-
     col1, col2 = st.columns([1, 2])
     with col1:
         process = st.button(t(lang, "intake.process"), type="primary")
     with col2:
         st.info(t(lang, "intake.tip"))
-
     if not process:
+        # If not processing, show preview of already imported source if exists
         doc = st.session_state.get(SS_SOURCE_DOC)
         if doc and isinstance(doc, dict) and doc.get("text"):
             st.markdown(f"### {t(lang, 'intake.source_preview')}")
@@ -516,6 +398,7 @@ def _render_intake(
         st.error(f"{t(lang, 'intake.import_failed')}: {exc}")
         return
 
+    # Save source document in session
     st.session_state[SS_SOURCE_DOC] = {
         "source_type": source_doc.source_type,
         "name": source_doc.name,
@@ -523,6 +406,7 @@ def _render_intake(
         "meta": source_doc.meta,
     }
 
+    # Basic extraction: find an email and URL to prefill contact email / website if empty
     emails = extract_emails(source_doc.text)
     urls = extract_urls(source_doc.text)
     if emails and (get_value(profile, Keys.COMPANY_CONTACT_EMAIL) in {None, ""}):
@@ -545,6 +429,7 @@ def _render_intake(
         )
 
     if not api_key:
+        # If no API key, skip LLM extraction and go straight to manual form
         st.warning(t(lang, "intake.no_openai_key"))
         st.session_state[SS_PROFILE] = profile
         st.session_state[SS_STEP] = "company"
@@ -552,92 +437,51 @@ def _render_intake(
         return
 
     try:
+        # Use LLM to extract fields from the source text
         client = LLMClient(api_key=api_key, model=model)
-        text = source_doc.text[:MAX_SOURCE_TEXT_CHARS]
         raw = client.text(
-            extraction_user_prompt(text),
+            extraction_user_prompt(source_doc.text[:MAX_SOURCE_TEXT_CHARS]),
             instructions=EXTRACTION_INSTRUCTIONS,
             temperature=0.0,
-            max_output_tokens=1800,
+            max_output_tokens=1000,
         )
-        payload = safe_parse_json(raw)
-
-        detected = payload.get("detected_language")
-        if isinstance(detected, str):
-            update_source_language(profile, detected)
-
-        fields = payload.get("fields") or []
-        updated = 0
-        for item in fields:
-            if not isinstance(item, dict):
-                continue
-            path = item.get("path")
-            if path not in ALL_FIELDS:
-                continue
-            value = item.get("value")
-            conf = item.get("confidence")
-            evidence = item.get("evidence")
-
-            if value is None and path in {
-                Keys.BENEFITS_ITEMS,
-                Keys.RESPONSIBILITIES,
-                Keys.HARD_REQ,
-                Keys.HARD_OPT,
-                Keys.SOFT_REQ,
-                Keys.LANG_REQ,
-                Keys.TOOLS,
-                Keys.MUST_NOT,
-                Keys.PROCESS_STAGES,
-            }:
-                value = []
-            if isinstance(value, str) and not value.strip():
-                value = None
-            if path in {
-                Keys.BENEFITS_ITEMS,
-                Keys.RESPONSIBILITIES,
-                Keys.HARD_REQ,
-                Keys.HARD_OPT,
-                Keys.SOFT_REQ,
-                Keys.LANG_REQ,
-                Keys.TOOLS,
-                Keys.MUST_NOT,
-                Keys.PROCESS_STAGES,
-            } and isinstance(value, str):
-                value = multiline_to_list(value)
-
-            conf_f = float(conf) if isinstance(conf, (int, float)) else None
-            evidence = clamp_str(evidence, 220) if isinstance(evidence, str) else None
-
-            if upsert_field(
-                profile,
-                path,
-                value,
-                provenance="extracted",
-                confidence=conf_f,
-                evidence=evidence,
-                prefer_existing_user=True,
-            ):
-                updated += 1
-
-        st.success(
-            f"{t(lang, 'intake.extract_done')} {t(lang, 'intake.updated_fields')}: {updated}"
-        )
+        data = safe_parse_json(raw)
+        if isinstance(data, dict):
+            fields = data.get("fields") or []
+            updates = 0
+            for entry in fields:
+                if not isinstance(entry, dict):
+                    continue
+                path = entry.get("path")
+                val = entry.get("value")
+                conf = entry.get("confidence")
+                prov = "extracted"
+                if path in ALL_FIELDS and upsert_field(
+                    profile, path, val, provenance=prov, confidence=conf, evidence="llm_extraction"
+                ):
+                    updates += 1
+            lang_detected = data.get("detected_language")
+            if lang_detected and isinstance(lang_detected, str):
+                update_source_language(profile, lang_detected)
         st.session_state[SS_PROFILE] = profile
-        st.session_state[SS_STEP] = "company"
-        st.rerun()
+        st.success(t(lang, "intake.extract_done"))
+        st.info(f"{t(lang, 'intake.updated_fields')}: {updates}")
     except Exception as e:
         st.error(f"{t(lang, 'intake.extract_failed')}: {e}")
-        st.session_state[SS_PROFILE] = profile
 
+    # After extraction, move to first form step (Company)
+    st.session_state[SS_STEP] = "company"
+    st.experimental_rerun()
 
 def _render_questions_step(
-    profile: dict[str, Any], *, step: str, api_key: str, model: str, lang: str
+    profile: dict[str, Any],
+    step: str,
+    *,
+    api_key: str,
+    model: str,
+    lang: str,
 ) -> None:
-    st.markdown(f"## {t(lang, _STEP_LABEL_KEYS.get(step, step))}")
-
-    if step == "skills":
-        _apply_pending_esco_skills(profile, lang=lang)
-
+    # Render all questions (primary and advanced) for a given wizard step
     missing_step = missing_required_for_step(profile, step)
     if missing_step:
         st.info(f"{t(lang, 'step.missing_in_step')}: {', '.join(missing_step)}")
@@ -646,9 +490,7 @@ def _render_questions_step(
     _render_question_list(profile, primary, step=step, lang=lang)
 
     with st.expander(t(lang, "ui.more_details"), expanded=False):
-        _render_question_list(
-            profile, more, step=step, lang=lang, advanced_section=True
-        )
+        _render_question_list(profile, more, step=step, lang=lang, advanced_section=True)
 
         # Optional: generate English variants for key fields (title + skills/tools)
         if step == "skills":
@@ -667,7 +509,7 @@ def _render_questions_step(
                     profile, api_key=api_key, model=model, lang=lang
                 )
 
-        # ESCO integration best fits in skills step
+        # ESCO integration (only on Skills step)
         if step == "skills" and st.session_state.get(SS_USE_ESCO, True):
             st.divider()
             _render_esco_sidebar(profile, lang=lang)
@@ -683,16 +525,17 @@ def _render_questions_step(
     with col_hint:
         st.caption(t(lang, "ui.ai_hint"))
 
+    # Auto-run follow-ups generation if enabled
     if st.session_state.get(SS_AUTO_AI) and bool(api_key):
         if step not in st.session_state[SS_AI_FOLLOWUPS]:
             _generate_ai_followups(step, api_key, model, lang, silent=True)
 
+    # Render AI follow-up questions if any
     fu = st.session_state.get(SS_AI_FOLLOWUPS, {}).get(step) or []
     if fu:
         st.markdown(f"### {t(lang, 'ui.ai_followups_title')}")
         for i, q in enumerate(fu, start=1):
             _render_ai_followup(profile, q, step=step, idx=i, lang=lang)
-
 
 def _render_question_list(
     profile: dict[str, Any],
@@ -704,7 +547,6 @@ def _render_question_list(
 ) -> None:
     if not questions:
         st.caption(t(lang, "ui.empty"))
-
     for q in questions:
         rec = get_record(profile, q.path)
         prov = rec.get("provenance") if rec else None
@@ -714,11 +556,10 @@ def _render_question_list(
             suffix = f" · {t(lang, f'provenance.{prov}', prov)}"
             if conf is not None:
                 suffix += f" ({conf:.2f})"
-
         label = question_label(q, lang) + (suffix if suffix else "")
         help_txt = question_help(q, lang)
         widget_key = f"w__{step}__{q.id}"
-
+        # Render appropriate input widget based on type
         if q.input_type in {"text", "email"}:
             st.text_input(
                 label,
@@ -789,9 +630,7 @@ def _render_question_list(
             st.text_area(
                 label,
                 value=list_to_multiline(
-                    raw_list
-                    if isinstance(raw_list, list)
-                    else multiline_to_list(str(raw_list or ""))
+                    raw_list if isinstance(raw_list, list) else multiline_to_list(str(raw_list or ""))
                 ),
                 help=help_txt or None,
                 key=widget_key,
@@ -807,24 +646,20 @@ def _render_question_list(
                 on_change=partial(_on_widget_change, q.path, "text", widget_key),
             )
 
-
 def _queue_esco_skills(skills: list[str]) -> None:
     st.session_state[SS_PENDING_ESCO_HARD_REQ] = skills
-
 
 def _apply_pending_esco_skills(profile: dict[str, Any], *, lang: str) -> None:
     pending = st.session_state.get(SS_PENDING_ESCO_HARD_REQ) or []
     if not pending:
         return
-
     cleaned = [str(s).strip() for s in pending if str(s).strip()]
     st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
     if not cleaned:
         return
-
+    # Update Hard Skills (required) both in widget and profile
     widget_key = "w__skills__hard_req"
     st.session_state[widget_key] = list_to_multiline(cleaned)
-
     set_field(
         profile,
         Keys.HARD_REQ,
@@ -836,11 +671,9 @@ def _apply_pending_esco_skills(profile: dict[str, Any], *, lang: str) -> None:
     st.session_state[SS_PROFILE] = profile
     st.success(t(lang, "esco.apply_success"))
 
-
 def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
     profile: dict[str, Any] = st.session_state[SS_PROFILE]
     raw = st.session_state.get(widget_key)
-
     value: Any = raw
     if input_type in {"text", "textarea", "email"}:
         value = str(raw or "").strip()
@@ -857,13 +690,13 @@ def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
         try:
             value = int(s) if s.isdigit() else float(s)
         except Exception:
-            value = s
+            value = s  # If numeric conversion fails, keep as string
     elif input_type == "date":
         s = str(raw or "").strip()
         if not s:
             clear_field(profile, path)
             return
-        value = s
+        value = s  # assume valid date string
     elif input_type == "select":
         s = str(raw or "").strip()
         if not s:
@@ -876,12 +709,8 @@ def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
         if not value:
             clear_field(profile, path)
             return
-
-    set_field(
-        profile, path, value, provenance="user", confidence=1.0, evidence="user_input"
-    )
+    set_field(profile, path, value, provenance="user", confidence=1.0, evidence="user_input")
     st.session_state[SS_PROFILE] = profile
-
 
 def _generate_ai_followups(
     step: str, api_key: str, model: str, lang: str, silent: bool = False
@@ -889,21 +718,17 @@ def _generate_ai_followups(
     profile: dict[str, Any] = st.session_state[SS_PROFILE]
     if not api_key:
         return
-
     primary, more = select_questions_for_step(profile, step)
     miss_req = missing_required_for_step(profile, step)
     miss_opt = iter_missing_optional(profile, list(primary) + list(more))
-
     if not miss_req and not miss_opt:
         st.session_state[SS_AI_FOLLOWUPS][step] = []
         return
-
     context = {
         "company": get_value(profile, Keys.COMPANY_NAME),
         "job_title": get_value(profile, Keys.POSITION_TITLE),
         "step": step,
     }
-
     try:
         client = LLMClient(api_key=api_key, model=model)
         raw = client.text(
@@ -947,19 +772,16 @@ def _generate_ai_followups(
         if not silent:
             st.error(f"{t(lang, 'ai.followups_failed')}: {e}")
 
-
 def _render_ai_followup(
     profile: dict[str, Any], q: dict[str, Any], *, step: str, idx: int, lang: str
 ) -> None:
     path = q.get("target_path")
     if path not in ALL_FIELDS:
         return
-
     question = q.get("question_de") if lang == LANG_DE else q.get("question_en")
     question = question or str(path)
     answer_type = q.get("answer_type") or "text"
     widget_key = f"fu__{step}__{idx}__{path}"
-
     if answer_type == "bool":
         st.checkbox(
             question,
@@ -972,19 +794,13 @@ def _render_ai_followup(
         st.text_area(
             question,
             value=list_to_multiline(
-                raw_list
-                if isinstance(raw_list, list)
-                else multiline_to_list(str(raw_list or ""))
+                raw_list if isinstance(raw_list, list) else multiline_to_list(str(raw_list or ""))
             ),
             height=120,
             key=widget_key,
             on_change=partial(_on_widget_change, path, "list", widget_key),
         )
-    elif (
-        answer_type == "select"
-        and isinstance(q.get("options"), list)
-        and q.get("options")
-    ):
+    elif answer_type == "select" and isinstance(q.get("options"), list) and q.get("options"):
         opts = [""] + list(q["options"])
         st.selectbox(
             question,
@@ -1000,30 +816,26 @@ def _render_ai_followup(
             on_change=partial(_on_widget_change, path, "text", widget_key),
         )
 
-
 def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
     st.markdown(f"#### {t(lang, 'esco.title')}")
     default_query = str(get_value(profile, Keys.POSITION_TITLE) or "").strip()
     query = st.text_input(t(lang, "esco.query"), value=default_query, key="esco_query")
-
-    query_lang = _guess_text_language(query, LANG_DE if lang == LANG_DE else LANG_EN)
-
-    col1, col2 = st.columns([1, 2])
+    # Detect language of query (simple heuristic: presence of German-specific characters)
+    lowered = query.lower()
+    query_lang = "de" if any(ch in lowered for ch in ("ä", "ö", "ü", "ß")) else "en"
+    col1, col2 = st.columns([1, 4])
     with col1:
         do_search = st.button(t(lang, "ui.esco_search"), key="esco_search_btn")
     with col2:
-        st.caption(
-            f"{t(lang, 'esco.caption')} · {t(lang, 'esco.lang_hint').format(query_lang)}"
-        )
-
-    if do_search and query:
+        st.caption(f"{t(lang, 'esco.caption')} · {t(lang, 'esco.lang_hint').format(query_lang)}")
+    if do_search:
         try:
             results = search_occupations(query, language=query_lang, limit=10)
             st.session_state["esco_results"] = results
         except ESCOError as e:
             st.error(f"{t(lang, 'esco.error')}: {e}")
             st.session_state["esco_results"] = []
-
+    # Display occupation results and skill suggestions
     results = st.session_state.get("esco_results") or []
     if results:
         labels = [r["label"] for r in results]
@@ -1033,42 +845,26 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
             format_func=lambda i: labels[i],
             key="esco_pick",
         )
-        picked = results[int(choice)]
-        set_field(
-            profile,
-            Keys.ESCO_OCCUPATION_URI,
-            picked["uri"],
-            provenance="user",
-            confidence=1.0,
-            evidence="esco_pick",
-        )
-        set_field(
-            profile,
-            Keys.ESCO_OCCUPATION_LABEL,
-            picked["label"],
-            provenance="user",
-            confidence=1.0,
-            evidence="esco_pick",
-        )
-
-        if st.button(t(lang, "ui.esco_apply_skills"), key="esco_apply_btn"):
-            try:
-                skills = occupation_related_skills(
-                    picked["uri"], language=query_lang, max_items=25
-                )
-                st.session_state["esco_skills"] = skills
-                set_field(
-                    profile,
-                    Keys.ESCO_SUGGESTED_SKILLS,
-                    skills,
-                    provenance="ai_suggestion",
-                    confidence=0.7,
-                    evidence="esco_skill_lookup",
-                )
-            except ESCOError as e:
-                st.error(f"{t(lang, 'esco.error')}: {e}")
-                st.session_state["esco_skills"] = []
-
+        picked = results[choice] if choice is not None else None
+        if picked:
+            # Store chosen occupation in profile (URI and label)
+            set_field(profile, Keys.ESCO_OCCUPATION_URI, picked["uri"], provenance="user", confidence=1.0, evidence="esco_pick")
+            set_field(profile, Keys.ESCO_OCCUPATION_LABEL, picked["label"], provenance="user", confidence=1.0, evidence="esco_pick")
+            if st.button(t(lang, "ui.esco_apply_skills"), key="esco_apply_btn"):
+                try:
+                    skills = occupation_related_skills(picked["uri"], language=query_lang)
+                    st.session_state["esco_skills"] = skills
+                    set_field(
+                        profile,
+                        Keys.ESCO_SUGGESTED_SKILLS,
+                        skills,
+                        provenance="ai_suggestion",
+                        confidence=0.8,
+                        evidence="esco_skill_lookup",
+                    )
+                except ESCOError as e:
+                    st.error(f"{t(lang, 'esco.error')}: {e}")
+                    st.session_state["esco_skills"] = []
     skills = st.session_state.get("esco_skills") or []
     if skills:
         selected = st.multiselect(
@@ -1087,21 +883,21 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
         )
         if selected:
             st.caption(t(lang, "esco.apply_hint"))
-
+    # After applying, if any pending skills are queued, integrate into profile
+    _apply_pending_esco_skills(profile, lang=lang)
 
 def _translate_fields_to_english(
     profile: dict[str, Any], *, api_key: str, model: str, lang: str
 ) -> None:
     if not api_key:
         return
-
+    # Prepare the payload with current German text for translation
     payload = {
         "position.job_title": get_value(profile, Keys.POSITION_TITLE),
         "requirements.hard_skills_required": get_value(profile, Keys.HARD_REQ),
         "requirements.soft_skills_required": get_value(profile, Keys.SOFT_REQ),
         "requirements.tools_and_technologies": get_value(profile, Keys.TOOLS),
     }
-
     try:
         client = LLMClient(api_key=api_key, model=model)
         raw = client.text(
@@ -1112,7 +908,6 @@ def _translate_fields_to_english(
         )
         data = safe_parse_json(raw)
         updates = 0
-
         if isinstance(data, dict):
             for path in [
                 Keys.POSITION_TITLE_EN,
@@ -1123,6 +918,7 @@ def _translate_fields_to_english(
                 val = data.get(path)
                 if val is None:
                     continue
+                # Convert newline-separated strings to list for skills/tools fields
                 if path in {
                     Keys.HARD_REQ_EN,
                     Keys.SOFT_REQ_EN,
@@ -1138,28 +934,23 @@ def _translate_fields_to_english(
                     evidence="translation",
                 )
                 updates += 1
-
         st.session_state[SS_PROFILE] = profile
         st.success(f"{t(lang, 'ui.translate_done')}: {updates}")
     except Exception as e:
         st.error(f"{t(lang, 'ui.translate_failed')}: {e}")
 
-
 def _render_review(profile: dict[str, Any], *, lang: str) -> None:
     st.markdown(f"## {t(lang, 'review.title')}")
     st.caption(t(lang, "review.edit_hint"))
-
     generated_md = render_job_ad_markdown(profile, lang)
     if not st.session_state.get(SS_JOB_AD_DRAFT):
         st.session_state[SS_JOB_AD_DRAFT] = generated_md
-
     md = st.text_area(
         t(lang, "review.job_ad"),
         value=st.session_state[SS_JOB_AD_DRAFT],
         height=450,
         key=SS_JOB_AD_DRAFT,
     )
-
     col1, col2, col3 = st.columns(3)
     with col1:
         st.download_button(
@@ -1183,11 +974,9 @@ def _render_review(profile: dict[str, Any], *, lang: str) -> None:
             file_name="job_ad.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
-
     st.divider()
     st.markdown(f"### {t(lang, 'review.profile_json')}")
     st.code(to_json(profile), language="json")
-
     extracted = []
     suggested = []
     for path, rec in profile.get("fields", {}).items():
@@ -1199,8 +988,6 @@ def _render_review(profile: dict[str, Any], *, lang: str) -> None:
     if extracted or suggested:
         st.markdown(f"### {t(lang, 'review.provenance_title')}")
         if extracted:
-            st.write(
-                f"{t(lang, 'review.provenance_extracted')}: ", ", ".join(extracted)
-            )
+            st.write(f"{t(lang, 'review.provenance_extracted')}: ", ", ".join(extracted))
         if suggested:
             st.write(f"{t(lang, 'review.provenance_ai')}: ", ", ".join(suggested))
