@@ -17,13 +17,14 @@ from .ingest import (
     source_from_text,
 )
 from .keys import ALL_FIELDS, REQUIRED_FIELDS, Keys
-from .llm_client import LLMClient, safe_parse_json
 from .llm_prompts import (
     EXTRACTION_INSTRUCTIONS,
     FOLLOWUP_INSTRUCTIONS,
     TRANSLATE_INSTRUCTIONS,
+    LLMClient,
     extraction_user_prompt,
     followup_user_prompt,
+    safe_parse_json,
     translate_user_prompt,
 )
 from .profile import (
