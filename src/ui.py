@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 from functools import partial
@@ -11,6 +12,12 @@ from typing import Any, Mapping, TypedDict, cast
 import altair as alt
 import pandas as pd
 import streamlit as st
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    BadRequestError,
+    InvalidRequestError,
+)
 
 from .esco_client import ESCOError, occupation_related_skills, search_occupations
 from .i18n import LANG_DE, LANG_EN, as_lang, option_label, t
@@ -105,6 +112,8 @@ MAX_SUGGESTION_PATHS = 12
 
 DEBUG_LLM_RESPONSES = os.getenv("DEBUG_LLM_RESPONSES") == "1"
 
+logger = logging.getLogger(__name__)
+
 
 def _log_llm_raw_response(raw: str | None, *, context: str) -> None:
     """Log raw LLM responses when debug logging is enabled."""
@@ -113,6 +122,7 @@ def _log_llm_raw_response(raw: str | None, *, context: str) -> None:
         return
     st.write(f"LLM raw response ({context}):")
     st.write(raw)
+
 
 _EMPLOYMENT_TYPE_KEYWORDS: dict[str, str] = {
     "vollzeit": "full_time",
@@ -1025,7 +1035,9 @@ def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
         st.session_state[SS_MODEL] = st.selectbox(
             f"🤖 {t(lang, 'sidebar.model')}",
             options=model_options,
-            index=_safe_option_index(model_options, _resolve_model_choice(default_model)),
+            index=_safe_option_index(
+                model_options, _resolve_model_choice(default_model)
+            ),
             help=t(lang, "sidebar.model_help").format(default_model),
         )
         st.markdown(
@@ -1321,8 +1333,18 @@ def _render_intake(
         st.info(f"{t(lang, 'intake.updated_fields')}: {updates}")
         if suggestion_updates:
             st.info(t(lang, "ai.suggestions_done").format(suggestion_updates))
-    except Exception as e:
-        st.error(f"{t(lang, 'intake.extract_failed')}: {e}")
+    except (BadRequestError, InvalidRequestError) as exc:
+        logger.exception("LLM invalid request during intake extraction", exc_info=exc)
+        st.error(t(lang, "intake.invalid_request"))
+        return
+    except (APIConnectionError, APITimeoutError, TimeoutError) as exc:
+        logger.exception("LLM network/timeout during intake extraction", exc_info=exc)
+        st.error(t(lang, "intake.retryable_error"))
+        return
+    except Exception as exc:
+        logger.exception("Unexpected error during intake extraction", exc_info=exc)
+        st.error(f"{t(lang, 'intake.extract_failed')}: {exc}")
+        return
 
     # After extraction, move to first form step (Company)
     st.session_state[SS_STEP] = "company"
