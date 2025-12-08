@@ -436,7 +436,6 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
         raw = client.text(
             extraction_user_prompt(source_doc.text[:MAX_SOURCE_TEXT_CHARS]),
             instructions=EXTRACTION_INSTRUCTIONS,
-            temperature=0.0,
             max_output_tokens=1000,
         )
         data = safe_parse_json(raw)
@@ -735,7 +734,6 @@ def _generate_ai_followups(
                 miss_req, miss_opt[:20], context=json.dumps(context, ensure_ascii=False)
             ),
             instructions=FOLLOWUP_INSTRUCTIONS,
-            temperature=0.2,
             max_output_tokens=900,
         )
         payload = safe_parse_json(raw)
@@ -902,7 +900,6 @@ def _translate_fields_to_english(
         raw = client.text(
             translate_user_prompt(payload),
             instructions=TRANSLATE_INSTRUCTIONS,
-            temperature=0.1,
             max_output_tokens=800,
         )
         data = safe_parse_json(raw)

@@ -7,7 +7,7 @@ from typing import Any, Iterable
 from openai import OpenAI
 
 from .keys import ALL_FIELDS, Keys
-from .settings import DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_MODEL, DEFAULT_TEMPERATURE
+from .settings import DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_MODEL
 from .utils import clamp_str
 
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
@@ -46,14 +46,12 @@ class LLMClient:
         input_text: str,
         *,
         instructions: str | None = None,
-        temperature: float = DEFAULT_TEMPERATURE,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     ) -> str:
         resp = self.client.responses.create(
             model=self.model,
             input=input_text,
             instructions=instructions,
-            temperature=temperature,
             max_output_tokens=max_output_tokens,
         )
         return response_to_text(resp)
