@@ -50,6 +50,16 @@ FILL_MISSING_INSTRUCTIONS = (
     " describing why the field is absent."
 )
 
+SUGGEST_MISSING_INSTRUCTIONS = (
+    "Suggest plausible values for missing job-ad fields using the provided context. "
+    "Return valid JSON with a 'suggestions' list. Each item must contain: 'path' "
+    "(one of the known schema paths), 'value' (string|number|list), 'confidence' "
+    "(0-1 float representing how suitable the suggestion is), and 'evidence' "
+    "(brief rationale or assumption). Use the supplied extraction context and source "
+    "text to stay realistic. If the text is silent, propose the most reasonable "
+    "default for the role and explain your reasoning. Avoid null/empty values."
+)
+
 
 class LLMClient:
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL):
@@ -182,6 +192,26 @@ def fill_missing_fields_prompt(
         " path/value/confidence/evidence).\n"
         f"Missing paths (prioritised): {_paths_hint(missing_paths)}\n"
         f"Prior extraction context: {context_json}\n"
+        f"Source: {source_name or 'job ad'}\n"
+        "Source text:\n---\n"
+        f"{source_text}\n---"
+    )
+
+
+def suggest_missing_fields_prompt(
+    *,
+    missing_paths: Iterable[str],
+    extracted_context: dict[str, Any] | None,
+    source_text: str,
+    source_name: str | None = None,
+) -> str:
+    context_json = json.dumps(extracted_context or {}, ensure_ascii=False)
+    return (
+        "Based on the job ad and existing structured fields, propose helpful values "
+        "for the missing paths listed below. Keep outputs concise and practical. "
+        "Return JSON with a 'suggestions' list mirroring the extraction shape.\n"
+        f"Paths to suggest: {_paths_hint(missing_paths)}\n"
+        f"Known context: {context_json}\n"
         f"Source: {source_name or 'job ad'}\n"
         "Source text:\n---\n"
         f"{source_text}\n---"
