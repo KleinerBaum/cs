@@ -7,3 +7,4 @@
 - Improved ESCO skill suggestions with language auto-detection, safer session-state updates for hard-skill injection, and clearer optional English job-title labelling.
 - Refreshed the UI with a branded hero background and fixed pulsating logo, ensuring consistent visibility across all wizard steps.
 - Clarified OpenAI key setup: set `OPENAI_API_KEY` in the environment or Streamlit secrets before starting, and surface a clearer in-app message when the key is missing.
+- Fixed the theme toggle to rely on the selectbox return value instead of manual session-state writes, preventing Streamlit errors when switching modes.

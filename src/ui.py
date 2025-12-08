@@ -3,9 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import os
-from functools import lru_cache, partial
+from functools import partial
 from pathlib import Path
-from string import Template
 from typing import Any, cast
 
 import streamlit as st
@@ -36,6 +35,7 @@ from .profile import (
     get_value,
     missing_required,
     new_profile,
+    Provenance,
     set_field,
     to_json,
     update_source_language,
@@ -51,13 +51,7 @@ from .question_engine import (
 )
 from .rendering import export_docx_bytes, render_job_ad_markdown
 from .settings import APP_NAME, MAX_SOURCE_TEXT_CHARS
-from .utils import (
-    clamp_str,
-    extract_emails,
-    extract_urls,
-    list_to_multiline,
-    multiline_to_list,
-)
+from .utils import extract_emails, extract_urls, list_to_multiline, multiline_to_list
 
 # Session state keys
 SS_PROFILE = "profile"
@@ -276,7 +270,7 @@ def run_app() -> None:
         )
         profile.get("meta", {})["ui_language"] = ui_lang
 
-        st.session_state[SS_THEME] = st.selectbox(
+        theme = st.selectbox(
             t(lang, "sidebar.theme"),
             options=[THEME_LIGHT, THEME_DARK],
             format_func=lambda x: t(lang, f"theme.{x}"),
@@ -295,7 +289,7 @@ def run_app() -> None:
             _reset_session()
 
     # Apply theme and branding
-    _apply_theme(st.session_state.get(SS_THEME, THEME_LIGHT))
+    _apply_theme(theme)
     _apply_background(BACKGROUND_IMAGE_PATH)
     _render_branding(LOGO_IMAGE_PATH)
 
@@ -455,9 +449,14 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
                 path = entry.get("path")
                 val = entry.get("value")
                 conf = entry.get("confidence")
-                prov = "extracted"
+                prov: Provenance = "extracted"
                 if path in ALL_FIELDS and upsert_field(
-                    profile, path, val, provenance=prov, confidence=conf, evidence="llm_extraction"
+                    profile,
+                    path,
+                    val,
+                    provenance=prov,
+                    confidence=conf,
+                    evidence="llm_extraction",
                 ):
                     updates += 1
             lang_detected = data.get("detected_language")

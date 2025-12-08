@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable
+from typing import Any, Callable
 
 from .i18n import LANG_DE
 from .keys import (
     CONTRACT_TYPE_VALUES,
     EMPLOYMENT_TYPE_VALUES,
-    REQUIRED_FIELDS,
-    SALARY_PERIOD_VALUES,
     SENIORITY_VALUES,
     WORK_POLICY_VALUES,
     Keys,
 )
-from .profile import get_record, get_value, is_missing
-from .settings import LOW_CONFIDENCE_THRESHOLD, MAX_PRIMARY_QUESTIONS_PER_STEP
+from .profile import get_value, is_missing
+from .settings import MAX_PRIMARY_QUESTIONS_PER_STEP
 
 ShowIf = Callable[[dict[str, Any]], bool]
 
