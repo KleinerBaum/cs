@@ -10,3 +10,4 @@
 - Fixed the theme toggle to rely on the selectbox return value instead of manual session-state writes, preventing Streamlit errors when switching modes.
 - Removed the unsupported `temperature` parameter from GPT-5-mini Responses API calls to avoid HTTP 400 errors during extraction, follow-up generation, and translation.
 - Harmonised the branding by resizing the pulsating logo badge and applying a teal-slate color palette across light/dark themes and CTAs.
+- Modernised the sidebar with themed cards, icon-labelled section headers, and clearer grouping for display settings, assistants, and reset actions.

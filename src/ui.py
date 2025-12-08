@@ -194,6 +194,8 @@ def _apply_theme(theme: str) -> None:
         --cs-surface-strong: #d8deea;
         --cs-primary: #1f7a8c;
         --cs-accent: #5eead4;
+        --cs-border: #cdd5e4;
+        --cs-muted: #3c4a64;
     }
     body {
         background-color: var(--cs-bg);
@@ -224,6 +226,44 @@ def _apply_theme(theme: str) -> None:
     .stButton>button {
         border-radius: 0.25rem;
     }
+    .cs-sidebar-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        color: var(--cs-text);
+    }
+    .cs-sidebar-card {
+        background: var(--cs-surface-strong);
+        border: 1px solid var(--cs-border);
+        border-radius: 0.75rem;
+        padding: 0.75rem 0.85rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+    .cs-sidebar-card-heading {
+        font-size: 1.05rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .cs-sidebar-card-subtitle {
+        margin: 0.25rem 0 0;
+        color: var(--cs-muted);
+        font-size: 0.9rem;
+    }
+    .cs-sidebar-section-title {
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: var(--cs-text);
+        margin-bottom: 0.35rem;
+    }
+    .cs-sidebar-divider {
+        border: none;
+        border-top: 1px solid var(--cs-border);
+        margin: 0.15rem 0 0.5rem;
+    }
     """
     css_dark = """
     :root {
@@ -233,6 +273,8 @@ def _apply_theme(theme: str) -> None:
         --cs-surface-strong: #1f2b3e;
         --cs-primary: #1f7a8c;
         --cs-accent: #5eead4;
+        --cs-border: #24344d;
+        --cs-muted: #94a3b8;
     }
     body {
         background-color: var(--cs-bg);
@@ -262,6 +304,44 @@ def _apply_theme(theme: str) -> None:
     }
     .stButton>button {
         border-radius: 0.25rem;
+    }
+    .cs-sidebar-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        color: var(--cs-text);
+    }
+    .cs-sidebar-card {
+        background: var(--cs-surface-strong);
+        border: 1px solid var(--cs-border);
+        border-radius: 0.75rem;
+        padding: 0.75rem 0.85rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    }
+    .cs-sidebar-card-heading {
+        font-size: 1.05rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .cs-sidebar-card-subtitle {
+        margin: 0.25rem 0 0;
+        color: var(--cs-muted);
+        font-size: 0.9rem;
+    }
+    .cs-sidebar-section-title {
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: var(--cs-text);
+        margin-bottom: 0.35rem;
+    }
+    .cs-sidebar-divider {
+        border: none;
+        border-top: 1px solid var(--cs-border);
+        margin: 0.15rem 0 0.5rem;
     }
     """
     style = css_light if theme == THEME_LIGHT else css_dark
@@ -332,6 +412,71 @@ def _render_branding(image_path: Path) -> None:
         )
 
 
+def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
+    """Render a structured sidebar with themed sections and controls."""
+    with st.sidebar:
+        st.markdown("<div class=\"cs-sidebar-shell\">", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="cs-sidebar-card">
+                <div class="cs-sidebar-card-heading">🧭 {t(lang, 'sidebar.title')}</div>
+                <p class="cs-sidebar-card-subtitle">{t(lang, 'sidebar.subtitle')}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+            <div class="cs-sidebar-card">
+                <div class="cs-sidebar-section-title">🎨 {t(lang, 'sidebar.section.display')}</div>
+                <hr class="cs-sidebar-divider" />
+            """,
+            unsafe_allow_html=True,
+        )
+        ui_lang = st.selectbox(
+            f"🔤 {t(lang, 'sidebar.language')}",
+            options=[LANG_DE, LANG_EN],
+            format_func=lambda x: "Deutsch" if x == LANG_DE else "English",
+            key="ui_lang",
+        )
+        profile.setdefault("meta", {})["ui_language"] = ui_lang
+        theme = st.selectbox(
+            f"🎨 {t(lang, 'sidebar.theme')}",
+            options=[THEME_LIGHT, THEME_DARK],
+            format_func=lambda x: t(lang, f"theme.{x}"),
+            key=SS_THEME,
+        )
+        st.markdown(
+            f"""
+                <div class="cs-sidebar-section-title" style="margin-top:0.35rem;">🧠 {t(lang, 'sidebar.section.assistants')}</div>
+                <hr class="cs-sidebar-divider" />
+            """,
+            unsafe_allow_html=True,
+        )
+        st.session_state[SS_USE_ESCO] = st.checkbox(
+            f"🗂️ {t(lang, 'sidebar.use_esco')}", value=st.session_state[SS_USE_ESCO]
+        )
+        st.session_state[SS_AUTO_AI] = st.checkbox(
+            f"🤖 {t(lang, 'sidebar.auto_ai')}", value=st.session_state[SS_AUTO_AI]
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown(
+            f"""
+            <div class="cs-sidebar-card">
+                <div class="cs-sidebar-section-title">⚡ {t(lang, 'sidebar.section.actions')}</div>
+                <hr class="cs-sidebar-divider" />
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(f"♻️ {t(lang, 'sidebar.reset')}", use_container_width=True):
+            _reset_session()
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    return theme
+
+
 def run_app() -> None:
     st.set_page_config(page_title="Need Analysis Wizard", page_icon="🧭", layout="wide")
     _init_state()
@@ -346,32 +491,7 @@ def run_app() -> None:
         st.stop()
     api_key = cast(str, api_key)
 
-    # Sidebar controls
-    with st.sidebar:
-        st.markdown(f"### {t(lang, 'sidebar.title')}")
-        ui_lang = st.selectbox(
-            t(lang, "sidebar.language"),
-            options=[LANG_DE, LANG_EN],
-            format_func=lambda x: "Deutsch" if x == LANG_DE else "English",
-            key="ui_lang",
-        )
-        profile.get("meta", {})["ui_language"] = ui_lang
-
-        theme = st.selectbox(
-            t(lang, "sidebar.theme"),
-            options=[THEME_LIGHT, THEME_DARK],
-            format_func=lambda x: t(lang, f"theme.{x}"),
-            key=SS_THEME,
-        )
-        st.session_state[SS_USE_ESCO] = st.checkbox(
-            t(lang, "sidebar.use_esco"), value=st.session_state[SS_USE_ESCO]
-        )
-        st.session_state[SS_AUTO_AI] = st.checkbox(
-            t(lang, "sidebar.auto_ai"), value=st.session_state[SS_AUTO_AI]
-        )
-        if st.button(t(lang, "sidebar.reset")):
-            _reset_session()
-
+    theme = _render_sidebar(lang=lang, profile=profile)
     model = st.session_state[SS_MODEL]
 
     # Apply theme and branding

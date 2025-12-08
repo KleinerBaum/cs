@@ -17,6 +17,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - The main app uses a background image (`images/AdobeStock_506577005.jpeg`) with a subtle overlay to ensure readability of form text.
 - A pulsating logo (`images/animation_pulse_Default_7kigl22lw.gif`) now sits in a scaled badge with generous padding; it stays clear of the wizard content while remaining visible on both desktop and mobile.
 - Light and dark themes share a teal-and-slate palette that matches the logo tones; buttons use the same gradient to keep CTA styling consistent with the branding.
+- The sidebar groups controls into icon-labeled sections (display/language, assistants, quick actions) on a contrasting card background to keep settings scannable.
 
 ## ESCO skill suggestions
 
