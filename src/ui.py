@@ -75,7 +75,13 @@ from .salary_prediction import (
     predict_salary_range,
 )
 from .settings import APP_NAME, DEFAULT_MODEL, MAX_SOURCE_TEXT_CHARS, configured_model
-from .utils import extract_emails, extract_urls, list_to_multiline, multiline_to_list
+from .utils import (
+    clamp_str,
+    extract_emails,
+    extract_urls,
+    list_to_multiline,
+    multiline_to_list,
+)
 
 # Session state keys
 SS_PROFILE = "profile"
@@ -1241,6 +1247,25 @@ def _render_intake(
         st.rerun()
         return
 
+    def _parse_or_warn(raw: str | None, *, context: str) -> Any:
+        try:
+            return safe_parse_json(raw)
+        except ValueError as exc:
+            preview = clamp_str(raw or "", 400)
+            logger.warning(
+                "JSON parsing failed during %s; continuing with fallback. error=%s preview=%s",
+                context,
+                exc,
+                preview,
+            )
+            st.warning(
+                "⚠️ Konnte die LLM-Antwort nicht als JSON lesen; versuche den Fallback. "
+                f"Auszug ({context}): {preview}\n"
+                "⚠️ Could not parse the LLM response; attempting fallback. "
+                f"Snippet ({context}): {preview}"
+            )
+            return {}
+
     try:
         # Use LLM to extract fields from the source text
         client = LLMClient(api_key=api_key, model=model)
@@ -1251,7 +1276,7 @@ def _render_intake(
             max_output_tokens=1000,
         )
         _log_llm_raw_response(raw, context="intake_extract")
-        data = safe_parse_json(raw)
+        data = _parse_or_warn(raw, context="intake_extract")
         updates = 0
         suggestion_updates = 0
         extracted_fields: list[Any] = []
@@ -1291,7 +1316,7 @@ def _render_intake(
                 max_output_tokens=600,
             )
             _log_llm_raw_response(fill_raw, context="intake_fill_missing")
-            fill_data = safe_parse_json(fill_raw)
+            fill_data = _parse_or_warn(fill_raw, context="intake_fill_missing")
             if isinstance(fill_data, dict):
                 fill_fields = fill_data.get("fields") or []
                 updates += _apply_extracted_fields(
@@ -1318,7 +1343,9 @@ def _render_intake(
                 max_output_tokens=800,
             )
             _log_llm_raw_response(suggest_raw, context="intake_suggest_missing")
-            suggest_data = safe_parse_json(suggest_raw)
+            suggest_data = _parse_or_warn(
+                suggest_raw, context="intake_suggest_missing"
+            )
             if isinstance(suggest_data, dict):
                 suggested_fields = suggest_data.get("suggestions") or []
                 suggestion_updates = _apply_extracted_fields(
