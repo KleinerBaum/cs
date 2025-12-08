@@ -52,6 +52,12 @@ from .question_engine import (
     select_questions_for_step,
 )
 from .rendering import export_docx_bytes, render_job_ad_markdown
+from .salary_prediction import (
+    SalaryAdjustment,
+    SalaryPrediction,
+    collect_salary_factors,
+    predict_salary_range,
+)
 from .settings import APP_NAME, MAX_SOURCE_TEXT_CHARS
 from .utils import extract_emails, extract_urls, list_to_multiline, multiline_to_list
 
@@ -68,6 +74,8 @@ SS_JOB_AD_DRAFT = "job_ad_draft"
 SS_THEME = "ui_theme"
 SS_PENDING_ESCO_HARD_REQ = "pending_esco_hard_req"
 SS_SHOW_REQUIRED_WARNING = "show_required_warning"
+SS_SALARY_FACTORS = "salary_factors"
+SS_SALARY_RESULT = "salary_prediction_result"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
@@ -88,6 +96,18 @@ _STEP_LABEL_KEYS = {
     "process": "step.process",
     "review": "step.review",
 }
+
+SALARY_FACTOR_OPTIONS: tuple[tuple[str, str], ...] = (
+    (Keys.POSITION_SENIORITY, "salary.factor.seniority"),
+    (Keys.LOCATION_CITY, "salary.factor.city"),
+    (Keys.LOCATION_WORK_POLICY, "salary.factor.work_policy"),
+    (Keys.LOCATION_REMOTE_SCOPE, "salary.factor.remote_scope"),
+    (Keys.EMPLOYMENT_TYPE, "salary.factor.employment_type"),
+    (Keys.EMPLOYMENT_CONTRACT, "salary.factor.contract_type"),
+    (Keys.COMPANY_INDUSTRY, "salary.factor.industry"),
+    (Keys.COMPANY_SIZE, "salary.factor.company_size"),
+    (Keys.SALARY_CURRENCY, "salary.factor.currency"),
+)
 
 
 def _init_state() -> None:
@@ -115,6 +135,15 @@ def _init_state() -> None:
         st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
     if SS_SHOW_REQUIRED_WARNING not in st.session_state:
         st.session_state[SS_SHOW_REQUIRED_WARNING] = False
+    if SS_SALARY_FACTORS not in st.session_state:
+        st.session_state[SS_SALARY_FACTORS] = {
+            Keys.POSITION_SENIORITY,
+            Keys.LOCATION_CITY,
+            Keys.EMPLOYMENT_TYPE,
+            Keys.EMPLOYMENT_CONTRACT,
+        }
+    if SS_SALARY_RESULT not in st.session_state:
+        st.session_state[SS_SALARY_RESULT] = None
 
 
 def _reset_session() -> None:
@@ -131,6 +160,8 @@ def _reset_session() -> None:
         SS_JOB_AD_DRAFT,
         SS_THEME,
         SS_SHOW_REQUIRED_WARNING,
+        SS_SALARY_FACTORS,
+        SS_SALARY_RESULT,
     ]:
         st.session_state.pop(k, None)
     st.rerun()
@@ -435,6 +466,35 @@ def _format_sidebar_value(value: Any, lang: str) -> str:
     return str(value)
 
 
+def _coerce_salary_prediction(raw: Any) -> SalaryPrediction | None:
+    if isinstance(raw, SalaryPrediction):
+        return raw
+    if not isinstance(raw, dict):
+        return None
+    try:
+        adjustments = [
+            SalaryAdjustment(
+                factor=str(adj.get("factor")),
+                multiplier=float(adj.get("multiplier", 1.0)),
+                value=str(adj.get("value", "")),
+            )
+            for adj in raw.get("adjustments", [])
+            if isinstance(adj, dict) and "factor" in adj
+        ]
+        min_raw = raw.get("min_salary")
+        max_raw = raw.get("max_salary")
+        return SalaryPrediction(
+            min_salary=int(min_raw if min_raw is not None else 0),
+            max_salary=int(max_raw if max_raw is not None else 0),
+            currency=str(raw.get("currency", "EUR")),
+            applied_factors=dict(raw.get("applied_factors", {})),
+            baseline=dict(raw.get("baseline", {})),
+            adjustments=adjustments,
+        )
+    except Exception:
+        return None
+
+
 def _render_sidebar_overview(*, lang: str, profile: dict[str, Any]) -> None:
     st.markdown(
         f"""
@@ -466,6 +526,86 @@ def _render_sidebar_overview(*, lang: str, profile: dict[str, Any]) -> None:
                 value = _format_sidebar_value(get_value(profile, q.path), lang)
                 st.markdown(f"**{label}:** {value}")
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_salary_factor_selection(profile: dict[str, Any], *, lang: str) -> set[str]:
+    current = set(st.session_state.get(SS_SALARY_FACTORS) or set())
+    updated: set[str] = set()
+    for path, label_key in SALARY_FACTOR_OPTIONS:
+        label = t(lang, label_key)
+        value_display = _format_sidebar_value(get_value(profile, path), lang)
+        checked = st.checkbox(
+            f"{label} ({value_display})",
+            value=path in current,
+            key=f"salary_factor_{path}",
+        )
+        if checked:
+            updated.add(path)
+    st.session_state[SS_SALARY_FACTORS] = updated
+    return updated
+
+
+def _adjustment_label(adj: SalaryAdjustment, *, lang: str) -> str:
+    label_map = {
+        "base": "salary.factor.seniority",
+        "location": "salary.factor.city",
+        "work_policy": "salary.factor.work_policy",
+        "employment_type": "salary.factor.employment_type",
+        "contract_type": "salary.factor.contract_type",
+        "industry": "salary.factor.industry",
+        "company_size": "salary.factor.company_size",
+        "remote_scope": "salary.factor.remote_scope",
+    }
+    if adj.factor == "base":
+        return t(lang, "salary.breakdown.base", adj.value)
+    pct = adj.multiplier - 1.0
+    pct_str = f"{pct:+.0%}" if pct else "±0%"
+    label = t(lang, label_map.get(adj.factor, adj.factor))
+    return t(lang, "salary.breakdown.factor", label, pct_str, adj.value or "—")
+
+
+def _render_salary_prediction(profile: dict[str, Any], *, lang: str) -> None:
+    st.markdown(f"### {t(lang, 'salary.section_title')}")
+    st.caption(t(lang, "salary.section_hint"))
+
+    selected_paths = _render_salary_factor_selection(profile, lang=lang)
+    st.caption(t(lang, "salary.selection_hint"))
+
+    if st.button(t(lang, "salary.calculate"), key="salary_predict_btn"):
+        selected_factors = collect_salary_factors(profile, selected_paths)
+        if not selected_factors:
+            st.session_state[SS_SALARY_RESULT] = None
+            st.warning(t(lang, "salary.no_values"))
+        else:
+            prediction = predict_salary_range(selected_factors)
+            st.session_state[SS_SALARY_RESULT] = prediction.to_dict()
+            st.success(t(lang, "salary.prediction_done"))
+
+    stored_prediction = _coerce_salary_prediction(
+        st.session_state.get(SS_SALARY_RESULT)
+    )
+    if not stored_prediction:
+        return
+
+    st.markdown(f"#### {t(lang, 'salary.result_title')}")
+    col_min, col_max = st.columns(2)
+    with col_min:
+        st.metric(
+            t(lang, "salary.range_min"),
+            f"{stored_prediction.min_salary:,.0f} {stored_prediction.currency}",
+        )
+    with col_max:
+        st.metric(
+            t(lang, "salary.range_max"),
+            f"{stored_prediction.max_salary:,.0f} {stored_prediction.currency}",
+        )
+
+    st.markdown(f"**{t(lang, 'salary.used_parameters')}**")
+    st.json(stored_prediction.applied_factors)
+
+    st.markdown(f"**{t(lang, 'salary.breakdown_title')}**")
+    for adj in stored_prediction.adjustments:
+        st.write("- " + _adjustment_label(adj, lang=lang))
 
 
 def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
@@ -1260,6 +1400,10 @@ def _render_review(profile: dict[str, Any], *, lang: str) -> None:
         height=450,
         key=SS_JOB_AD_DRAFT,
     )
+
+    st.divider()
+    _render_salary_prediction(profile, lang=lang)
+
     col1, col2, col3 = st.columns(3)
     with col1:
         st.download_button(
