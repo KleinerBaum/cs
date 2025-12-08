@@ -70,6 +70,8 @@ SS_SHOW_REQUIRED_WARNING = "show_required_warning"
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
 
+DEFAULT_MODEL = "gpt-5-mini"
+
 BACKGROUND_IMAGE_PATH = Path("images/AdobeStock_506577005.jpeg")
 LOGO_IMAGE_PATH = Path("images/animation_pulse_Default_7kigl22lw.gif")
 
@@ -95,8 +97,7 @@ def _init_state() -> None:
         st.session_state[SS_SOURCE_DOC] = None
     if SS_AI_FOLLOWUPS not in st.session_state:
         st.session_state[SS_AI_FOLLOWUPS] = {}
-    if SS_MODEL not in st.session_state:
-        st.session_state[SS_MODEL] = "gpt-5-mini"
+    st.session_state[SS_MODEL] = DEFAULT_MODEL
     if SS_USE_ESCO not in st.session_state:
         st.session_state[SS_USE_ESCO] = True
     if SS_AUTO_AI not in st.session_state:
@@ -285,9 +286,6 @@ def run_app() -> None:
             format_func=lambda x: t(lang, f"theme.{x}"),
             key=SS_THEME,
         )
-        model = st.text_input(
-            t(lang, "sidebar.model"), value=st.session_state[SS_MODEL], key=SS_MODEL
-        )
         st.session_state[SS_USE_ESCO] = st.checkbox(
             t(lang, "sidebar.use_esco"), value=st.session_state[SS_USE_ESCO]
         )
@@ -296,6 +294,8 @@ def run_app() -> None:
         )
         if st.button(t(lang, "sidebar.reset")):
             _reset_session()
+
+    model = st.session_state[SS_MODEL]
 
     # Apply theme and branding
     _apply_theme(theme)
