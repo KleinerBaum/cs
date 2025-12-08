@@ -2,6 +2,12 @@
 
 A modular Streamlit app for line managers to transform an existing job ad (URL, PDF, DOCX, or pasted text) into a structured **NeedAnalysisProfile** and an exportable job ad draft.
 
+## Ingestion fidelity (DE/EN)
+
+- PDF uploads use PyMuPDF with ligature and whitespace preservation so that bullet lists, headings, and special characters remain intact in the extracted raw text.
+- DOCX uploads now keep blank lines between paragraphs to retain list and section boundaries when populating the wizard.
+- If a PDF contains only images (likely a scan) and no extractable text, the import step surfaces a bilingual hint to provide a searchable PDF or run OCR first.
+
 ## Multi-step wizard (DE/EN)
 
 The app features a bilingual, multi-step wizard to collect all required fields before generating a job ad. Each section (company, team, position, framework, tasks, skills, benefits, process, and review) is presented step-by-step with forward/backward navigation. Required fields ("Pflichtfelder") are marked with an asterisk and highlighted if missing. All UI labels and generated job-ad content adapt to the selected language (German or English).

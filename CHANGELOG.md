@@ -11,4 +11,4 @@
 - Removed the unsupported `temperature` parameter from GPT-5-mini Responses API calls to avoid HTTP 400 errors during extraction, follow-up generation, and translation.
 - Harmonised the branding by resizing the pulsating logo badge and applying a teal-slate color palette across light/dark themes and CTAs.
 - Modernised the sidebar with themed cards, icon-labelled section headers, and clearer grouping for display settings, assistants, and reset actions.
-- Added a sidebar input overview with per-step expanders and quick jump buttons to reopen any wizard section directly.
+- Improved PDF/DOCX ingestion: preserve bullet/layout spacing, keep paragraph breaks, and surface a bilingual hint when uploads look like scanned image PDFs without extractable text.

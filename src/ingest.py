@@ -14,6 +14,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 DEFAULT_TIMEOUT = 10
 
+
 @dataclass
 class SourceDocument:
     source_type: str
@@ -21,12 +22,28 @@ class SourceDocument:
     text: str
     meta: dict[str, Any]
 
+
 class IngestError(Exception):
     """Raised when a source document cannot be ingested."""
 
+
 def _clean_text(text: str) -> str:
-    # Remove null bytes and excessive whitespace
-    return " ".join(text.replace("\x00", " ").split())
+    """Normalize extracted text while preserving paragraph structure."""
+
+    sanitized = text.replace("\x00", " ")
+    normalized_lines: list[str] = []
+    for raw_line in sanitized.splitlines():
+        stripped_line = raw_line.strip()
+        if not stripped_line:
+            # Keep at most a single blank line to separate paragraphs.
+            if normalized_lines and normalized_lines[-1] == "":
+                continue
+            normalized_lines.append("")
+            continue
+        collapsed = " ".join(stripped_line.split())
+        normalized_lines.append(collapsed)
+    return "\n".join(normalized_lines).strip()
+
 
 def _ensure_url(url: str) -> str:
     parsed = urlparse(url)
@@ -37,7 +54,10 @@ def _ensure_url(url: str) -> str:
         raise IngestError("Invalid URL")
     return url
 
-def fetch_text_from_url(url: str, *, timeout: float = DEFAULT_TIMEOUT) -> SourceDocument:
+
+def fetch_text_from_url(
+    url: str, *, timeout: float = DEFAULT_TIMEOUT
+) -> SourceDocument:
     normalized_url = _ensure_url(url.strip())
     response: requests.Response | None = None
     last_error: Exception | None = None
@@ -70,15 +90,42 @@ def fetch_text_from_url(url: str, *, timeout: float = DEFAULT_TIMEOUT) -> Source
     }
     return SourceDocument(source_type="url", name=title, text=cleaned, meta=meta)
 
+
 def _extract_pdf(data: bytes) -> str:
     with fitz.open(stream=data, filetype="pdf") as doc:
-        text_chunks = [page.get_text() for page in doc]
-    return _clean_text("\n".join(text_chunks))
+        text_chunks: list[str] = []
+        image_only_pages = True
+        has_images = False
+        for page in doc:
+            page_text = page.get_text(
+                "text",
+                flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE,
+            )
+            if page_text.strip():
+                image_only_pages = False
+            text_chunks.append(page_text)
+            if page.get_images(full=True):
+                # Keep track of embedded images to warn about scanned PDFs.
+                has_images = True
+        cleaned = _clean_text("\n".join(text_chunks))
+        if cleaned:
+            return cleaned
+        if image_only_pages and has_images:
+            raise IngestError(
+                "Das PDF scheint eingescannt zu sein und enthält keinen erkennbaren Text. "
+                "Bitte eine durchsuchbare PDF hochladen oder ein OCR-Tool nutzen.\n"
+                "The PDF appears to be scanned with no extractable text. Please upload a searchable "
+                "PDF or run it through OCR first."
+            )
+    raise IngestError("Could not read any text from the uploaded PDF")
+
 
 def _extract_docx(data: bytes) -> str:
     document = Document(BytesIO(data))
     paragraphs = [para.text for para in document.paragraphs]
-    return _clean_text("\n".join(paragraphs))
+    # Separate paragraphs with blank lines to retain list and section context.
+    return _clean_text("\n\n".join(paragraphs))
+
 
 def extract_text_from_upload(upload: UploadedFile) -> SourceDocument:
     name = getattr(upload, "name", "uploaded_file")
@@ -98,6 +145,7 @@ def extract_text_from_upload(upload: UploadedFile) -> SourceDocument:
         raise IngestError("Could not read any text from the uploaded file")
     meta: dict[str, Any] = {"filename": name, "size": len(raw_bytes)}
     return SourceDocument(source_type=source_type, name=name, text=text, meta=meta)
+
 
 def source_from_text(text: str) -> SourceDocument:
     cleaned = _clean_text(text)
