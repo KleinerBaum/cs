@@ -17,8 +17,12 @@ EXTRACTION_INSTRUCTIONS = (
     " fields: 'detected_language' (ISO-639-1) and 'fields' (list of"
     " objects). Each object must contain: 'path' (one of the known schema"
     " paths), 'value' (string|number|list|null), 'confidence' (0-1 float),"
-    " and 'evidence' (short rationale or quote). Only use provided schema"
-    " paths and avoid fabricating data."
+    " and 'evidence' (short rationale or quote). Always cover ALL required"
+    " paths, prioritising: position.job_title, employment.employment_type,"
+    " employment.contract_type, location.primary_city,"
+    " requirements.languages_required. Avoid fabricating data—if a value"
+    " truly cannot be found, set it to null but include an evidence note"
+    " explaining the absence."
 )
 
 FOLLOWUP_INSTRUCTIONS = (
@@ -33,6 +37,17 @@ TRANSLATE_INSTRUCTIONS = (
     "Translate given job-related fields to English while preserving list"
     " structure. Return JSON mapping the target schema keys to translated"
     " values. Keep bullet points separated by newlines when appropriate."
+)
+
+FILL_MISSING_INSTRUCTIONS = (
+    "Recover missing required job-ad fields using the provided source text"
+    " and prior extraction context. Return valid JSON with a 'fields' list"
+    " in the same shape as the primary extraction (path, value, confidence,"
+    " evidence). Focus ONLY on the listed missing paths and prioritise the"
+    " core fields (job title, employment type, contract type, primary city,"
+    " languages required). Do not invent values; prefer exact matches from"
+    " the text. If unavailable, return null with a brief evidence note"
+    " describing why the field is absent."
 )
 
 
@@ -148,6 +163,26 @@ def extraction_user_prompt(source_text: str) -> str:
         "Extract structured job-ad information using the schema paths below."
         " Return JSON as specified in the instructions.\n"
         f"Known paths: {_paths_hint(ALL_FIELDS)}\n"
+        "Source text:\n---\n"
+        f"{source_text}\n---"
+    )
+
+
+def fill_missing_fields_prompt(
+    *,
+    missing_paths: Iterable[str],
+    extracted_context: dict[str, Any] | None,
+    source_text: str,
+    source_name: str | None = None,
+) -> str:
+    context_json = json.dumps(extracted_context or {}, ensure_ascii=False)
+    return (
+        "Fill ONLY the listed missing schema paths from the job ad. Keep the"
+        " JSON shape identical to the primary extraction (fields array with"
+        " path/value/confidence/evidence).\n"
+        f"Missing paths (prioritised): {_paths_hint(missing_paths)}\n"
+        f"Prior extraction context: {context_json}\n"
+        f"Source: {source_name or 'job ad'}\n"
         "Source text:\n---\n"
         f"{source_text}\n---"
     )
