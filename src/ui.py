@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import time
 from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, TypedDict, cast
@@ -1247,11 +1248,12 @@ def _render_intake(
         st.rerun()
         return
 
-    def _parse_or_warn(raw: str | None, *, context: str) -> Any:
+    def _parse_or_warn(raw: str | None, *, context: str) -> tuple[Any, bool]:
+        normalized_raw = raw or ""
         try:
-            return safe_parse_json(raw)
+            return safe_parse_json(normalized_raw), True
         except ValueError as exc:
-            preview = clamp_str(raw or "", 400)
+            preview = clamp_str(normalized_raw, 400)
             logger.warning(
                 "JSON parsing failed during %s; continuing with fallback. error=%s preview=%s",
                 context,
@@ -1264,7 +1266,7 @@ def _render_intake(
                 "⚠️ Could not parse the LLM response; attempting fallback. "
                 f"Snippet ({context}): {preview}"
             )
-            return {}
+            return {}, False
 
     data: dict[str, Any] = {}
     extracted_fields: list[Any] = []
@@ -1272,6 +1274,7 @@ def _render_intake(
     suggestion_updates = 0
     client: LLMClient | None = None
     llm_error: str | None = None
+    primary_parse_ok = True
     source_excerpt = source_doc.text[:MAX_SOURCE_TEXT_CHARS]
 
     try:
@@ -1283,8 +1286,8 @@ def _render_intake(
             max_output_tokens=1000,
         )
         _log_llm_raw_response(raw, context="intake_extract")
-        data = _parse_or_warn(raw, context="intake_extract")
-        if isinstance(data, dict):
+        data, primary_parse_ok = _parse_or_warn(raw, context="intake_extract")
+        if isinstance(data, dict) and primary_parse_ok:
             extracted_fields = data.get("fields") or []
             updates += _apply_extracted_fields(
                 profile, extracted_fields, evidence="llm_extraction"
@@ -1313,7 +1316,71 @@ def _render_intake(
     missing_priority = [
         path for path in PRIORITY_REQUIRED_PATHS if is_missing(profile, path)
     ]
-    if missing_priority and client is not None and llm_error is None:
+    recovery_attempted = False
+    recovery_successful = False
+
+    def _recover_missing_fields(*, context_label: str) -> bool:
+        nonlocal llm_error, updates
+        if client is None:
+            return False
+        delays = [0.4, 0.8]
+        for attempt, delay in enumerate(delays):
+            try:
+                fill_raw = client.text(
+                    fill_missing_fields_prompt(
+                        missing_paths=missing_priority,
+                        extracted_context=None,
+                        source_text=source_excerpt,
+                        source_name=source_doc.name,
+                    ),
+                    instructions=FILL_MISSING_INSTRUCTIONS,
+                    max_output_tokens=320,
+                )
+                _log_llm_raw_response(fill_raw, context=context_label)
+                fill_data, parse_ok = _parse_or_warn(fill_raw, context=context_label)
+                if isinstance(fill_data, dict) and parse_ok:
+                    fill_fields = fill_data.get("fields") or []
+                    updates += _apply_extracted_fields(
+                        profile, fill_fields, evidence="llm_missing_recovery"
+                    )
+                    return True
+            except (BadRequestError, InvalidRequestError) as exc:
+                logger.exception(
+                    "LLM invalid request during %s", context_label, exc_info=exc
+                )
+                llm_error = t(lang, "intake.invalid_request")
+            except (APIConnectionError, APITimeoutError, TimeoutError) as exc:
+                logger.exception(
+                    "LLM network/timeout during %s", context_label, exc_info=exc
+                )
+                llm_error = t(lang, "intake.retryable_error")
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception(
+                    "Unexpected error during %s", context_label, exc_info=exc
+                )
+                llm_error = f"{t(lang, 'intake.extract_failed')}: {exc}"
+
+            if attempt < len(delays) - 1:
+                time.sleep(delay)
+
+        return False
+
+    needs_recovery = missing_priority and (
+        (client is not None and llm_error is not None) or not primary_parse_ok
+    )
+
+    if needs_recovery and client is not None:
+        recovery_attempted = True
+        recovery_successful = _recover_missing_fields(
+            context_label="intake_fill_missing_recovery"
+        )
+
+    if (
+        missing_priority
+        and client is not None
+        and llm_error is None
+        and primary_parse_ok
+    ):
         context_payload: dict[str, Any] = {}
         if isinstance(data, dict):
             context_payload = {
@@ -1331,17 +1398,22 @@ def _render_intake(
             max_output_tokens=600,
         )
         _log_llm_raw_response(fill_raw, context="intake_fill_missing")
-        fill_data = _parse_or_warn(fill_raw, context="intake_fill_missing")
-        if isinstance(fill_data, dict):
+        fill_data, fill_parse_ok = _parse_or_warn(
+            fill_raw, context="intake_fill_missing"
+        )
+        if isinstance(fill_data, dict) and fill_parse_ok:
             fill_fields = fill_data.get("fields") or []
             updates += _apply_extracted_fields(
                 profile, fill_fields, evidence="llm_missing_recovery"
             )
 
-    suggestion_paths = _collect_paths_for_ai_suggestions(profile)[
-        :MAX_SUGGESTION_PATHS
-    ]
-    if suggestion_paths and client is not None and llm_error is None:
+    suggestion_paths = _collect_paths_for_ai_suggestions(profile)[:MAX_SUGGESTION_PATHS]
+    if (
+        suggestion_paths
+        and client is not None
+        and llm_error is None
+        and primary_parse_ok
+    ):
         suggestion_context: dict[str, Any] = {
             "fields": extracted_fields,
             "profile_values": flatten_values(profile),
@@ -1359,10 +1431,10 @@ def _render_intake(
             max_output_tokens=800,
         )
         _log_llm_raw_response(suggest_raw, context="intake_suggest_missing")
-        suggest_data = _parse_or_warn(
+        suggest_data, suggest_parse_ok = _parse_or_warn(
             suggest_raw, context="intake_suggest_missing"
         )
-        if isinstance(suggest_data, dict):
+        if isinstance(suggest_data, dict) and suggest_parse_ok:
             suggested_fields = suggest_data.get("suggestions") or []
             suggestion_updates = _apply_extracted_fields(
                 profile,
@@ -1371,6 +1443,12 @@ def _render_intake(
                 provenance="ai_suggestion",
             )
             updates += suggestion_updates
+
+    if needs_recovery and recovery_attempted and not recovery_successful:
+        st.warning(
+            "⚠️ Automatische Extraktion fehlgeschlagen; nutze nur heuristische Ergebnisse. "
+            "⚠️ Automatic extraction failed; using heuristic values only."
+        )
 
     st.session_state[SS_PROFILE] = profile
     if llm_error:
