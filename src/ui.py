@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from functools import partial
 from pathlib import Path
 from typing import Any, cast
@@ -21,19 +22,21 @@ from .ingest import (
 from .keys import ALL_FIELDS, REQUIRED_FIELDS, Keys
 from .llm_prompts import (
     EXTRACTION_INSTRUCTIONS,
+    FILL_MISSING_INSTRUCTIONS,
     FOLLOWUP_INSTRUCTIONS,
     TRANSLATE_INSTRUCTIONS,
     LLMClient,
     extraction_user_prompt,
+    fill_missing_fields_prompt,
     followup_user_prompt,
     safe_parse_json,
     translate_user_prompt,
 )
 from .profile import (
-    Provenance,
     clear_field,
     get_record,
     get_value,
+    is_missing,
     is_missing_value,
     missing_required,
     new_profile,
@@ -76,6 +79,60 @@ DEFAULT_MODEL = "gpt-5-mini"
 
 BACKGROUND_IMAGE_PATH = Path("images/AdobeStock_506577005.jpeg")
 LOGO_IMAGE_PATH = Path("images/animation_pulse_Default_7kigl22lw.gif")
+
+PRIORITY_REQUIRED_PATHS = [
+    Keys.POSITION_TITLE,
+    Keys.EMPLOYMENT_TYPE,
+    Keys.EMPLOYMENT_CONTRACT,
+    Keys.LOCATION_CITY,
+    Keys.LANG_REQ,
+]
+
+_EMPLOYMENT_TYPE_KEYWORDS: dict[str, str] = {
+    "vollzeit": "full_time",
+    "full time": "full_time",
+    "full-time": "full_time",
+    "teilzeit": "part_time",
+    "part time": "part_time",
+    "part-time": "part_time",
+    "werkstudent": "part_time",
+    "student": "part_time",
+    "contractor": "contractor",
+    "freelance": "contractor",
+    "freelancer": "contractor",
+    "praktikant": "intern",
+    "praktikum": "intern",
+    "intern": "intern",
+    "internship": "intern",
+}
+
+_CONTRACT_TYPE_KEYWORDS: dict[str, str] = {
+    "unbefristet": "permanent",
+    "permanent": "permanent",
+    "befristet": "fixed_term",
+    "befristete": "fixed_term",
+    "befristeter": "fixed_term",
+    "fixed term": "fixed_term",
+    "zeitvertrag": "fixed_term",
+}
+
+_LANGUAGE_KEYWORDS: dict[str, str] = {
+    "german": "German",
+    "deutsch": "German",
+    "english": "English",
+    "englisch": "English",
+    "french": "French",
+    "franz": "French",
+    "spanish": "Spanish",
+    "spanisch": "Spanish",
+}
+
+_CITY_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(
+        r"(?:standort|location)[:\s]+([A-ZÄÖÜ][\wÄÖÜäöüß .-]{2,50})", re.IGNORECASE
+    ),
+    re.compile(r"in\s+([A-ZÄÖÜ][\wÄÖÜäöüß.-]{2,50})", re.IGNORECASE),
+]
 
 _STEP_LABEL_KEYS = {
     "intake": "intake.title",
@@ -160,6 +217,151 @@ def _resolve_api_key() -> str | None:
     if env_key:
         return env_key
     return None
+
+
+def _apply_extracted_fields(
+    profile: dict[str, Any],
+    entries: list[Any],
+    *,
+    evidence: str,
+) -> int:
+    updates = 0
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        val = entry.get("value")
+        conf = entry.get("confidence")
+        if path in ALL_FIELDS and upsert_field(
+            profile,
+            path,
+            val,
+            provenance="extracted",
+            confidence=conf if isinstance(conf, (int, float)) else None,
+            evidence=evidence,
+        ):
+            updates += 1
+    return updates
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
+
+
+def _guess_job_title(source_doc: SourceDocument) -> str | None:
+    name_candidates = [source_doc.name]
+    if source_doc.name and any(sep in source_doc.name for sep in ["|", "-"]):
+        for token in re.split(r"[|\-–—]", source_doc.name):
+            cleaned = token.strip()
+            if cleaned:
+                name_candidates.append(cleaned)
+    text_candidates = [
+        line.strip() for line in source_doc.text.splitlines() if line.strip()
+    ]
+    for cand in [*name_candidates, *text_candidates]:
+        if 3 <= len(cand) <= 120:
+            return cand
+    return None
+
+
+def _detect_keyword_value(text_lower: str, keyword_map: dict[str, str]) -> str | None:
+    for key, mapped in keyword_map.items():
+        if key in text_lower:
+            return mapped
+    return None
+
+
+def _detect_languages(text_lower: str) -> list[str]:
+    hits: list[str] = []
+    for key, mapped in _LANGUAGE_KEYWORDS.items():
+        if key in text_lower:
+            hits.append(mapped)
+    return _dedupe_preserve_order(hits)
+
+
+def _find_city(text: str, name: str | None) -> str | None:
+    for pattern in _CITY_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            candidate = match.group(1).strip().strip(",.;")
+            if candidate:
+                return candidate
+    if name:
+        for token in re.split(r"[|\-–—]", name):
+            cleaned = token.strip()
+            if cleaned and 2 <= len(cleaned) <= 60 and cleaned[0].isupper():
+                return cleaned
+    return None
+
+
+def _heuristic_fill_required_fields(
+    profile: dict[str, Any], missing_paths: list[str], source_doc: SourceDocument
+) -> int:
+    text_lower = source_doc.text.lower()
+    updates = 0
+    if Keys.POSITION_TITLE in missing_paths:
+        title = _guess_job_title(source_doc)
+        if title and upsert_field(
+            profile,
+            Keys.POSITION_TITLE,
+            title,
+            provenance="extracted",
+            confidence=0.35,
+            evidence="heuristic_title",
+        ):
+            updates += 1
+    if Keys.EMPLOYMENT_TYPE in missing_paths:
+        employment_type = _detect_keyword_value(text_lower, _EMPLOYMENT_TYPE_KEYWORDS)
+        if employment_type and upsert_field(
+            profile,
+            Keys.EMPLOYMENT_TYPE,
+            employment_type,
+            provenance="extracted",
+            confidence=0.30,
+            evidence="keyword_employment_type",
+        ):
+            updates += 1
+    if Keys.EMPLOYMENT_CONTRACT in missing_paths:
+        contract_type = _detect_keyword_value(text_lower, _CONTRACT_TYPE_KEYWORDS)
+        if contract_type and upsert_field(
+            profile,
+            Keys.EMPLOYMENT_CONTRACT,
+            contract_type,
+            provenance="extracted",
+            confidence=0.30,
+            evidence="keyword_contract_type",
+        ):
+            updates += 1
+    if Keys.LANG_REQ in missing_paths:
+        languages = _detect_languages(text_lower)
+        if languages and upsert_field(
+            profile,
+            Keys.LANG_REQ,
+            languages,
+            provenance="extracted",
+            confidence=0.25,
+            evidence="keyword_languages",
+        ):
+            updates += 1
+    if Keys.LOCATION_CITY in missing_paths:
+        city = _find_city(source_doc.text, source_doc.name)
+        if city and upsert_field(
+            profile,
+            Keys.LOCATION_CITY,
+            city,
+            provenance="extracted",
+            confidence=0.20,
+            evidence="location_hint",
+        ):
+            updates += 1
+    return updates
 
 
 def _set_step(step: str) -> None:
@@ -706,34 +908,56 @@ def _render_intake(
     try:
         # Use LLM to extract fields from the source text
         client = LLMClient(api_key=api_key, model=model)
+        source_excerpt = source_doc.text[:MAX_SOURCE_TEXT_CHARS]
         raw = client.text(
-            extraction_user_prompt(source_doc.text[:MAX_SOURCE_TEXT_CHARS]),
+            extraction_user_prompt(source_excerpt),
             instructions=EXTRACTION_INSTRUCTIONS,
             max_output_tokens=1000,
         )
         data = safe_parse_json(raw)
+        updates = 0
+        extracted_fields: list[Any] = []
         if isinstance(data, dict):
-            fields = data.get("fields") or []
-            updates = 0
-            for entry in fields:
-                if not isinstance(entry, dict):
-                    continue
-                path = entry.get("path")
-                val = entry.get("value")
-                conf = entry.get("confidence")
-                prov: Provenance = "extracted"
-                if path in ALL_FIELDS and upsert_field(
-                    profile,
-                    path,
-                    val,
-                    provenance=prov,
-                    confidence=conf,
-                    evidence="llm_extraction",
-                ):
-                    updates += 1
+            extracted_fields = data.get("fields") or []
+            updates += _apply_extracted_fields(
+                profile, extracted_fields, evidence="llm_extraction"
+            )
             lang_detected = data.get("detected_language")
             if lang_detected and isinstance(lang_detected, str):
                 update_source_language(profile, lang_detected)
+
+        missing_priority = [
+            path for path in PRIORITY_REQUIRED_PATHS if is_missing(profile, path)
+        ]
+        updates += _heuristic_fill_required_fields(
+            profile, missing_priority, source_doc
+        )
+        missing_priority = [
+            path for path in PRIORITY_REQUIRED_PATHS if is_missing(profile, path)
+        ]
+        if missing_priority:
+            context_payload: dict[str, Any] = {}
+            if isinstance(data, dict):
+                context_payload = {
+                    "detected_language": data.get("detected_language"),
+                    "fields": extracted_fields,
+                }
+            fill_raw = client.text(
+                fill_missing_fields_prompt(
+                    missing_paths=missing_priority,
+                    extracted_context=context_payload,
+                    source_text=source_excerpt,
+                    source_name=source_doc.name,
+                ),
+                instructions=FILL_MISSING_INSTRUCTIONS,
+                max_output_tokens=600,
+            )
+            fill_data = safe_parse_json(fill_raw)
+            if isinstance(fill_data, dict):
+                fill_fields = fill_data.get("fields") or []
+                updates += _apply_extracted_fields(
+                    profile, fill_fields, evidence="llm_missing_recovery"
+                )
         st.session_state[SS_PROFILE] = profile
         st.success(t(lang, "intake.extract_done"))
         st.info(f"{t(lang, 'intake.updated_fields')}: {updates}")
