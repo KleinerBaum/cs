@@ -65,9 +65,12 @@ SS_TRANSLATED = "translated_once"
 SS_JOB_AD_DRAFT = "job_ad_draft"
 SS_THEME = "ui_theme"
 SS_PENDING_ESCO_HARD_REQ = "pending_esco_hard_req"
+SS_SHOW_REQUIRED_WARNING = "show_required_warning"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
+
+DEFAULT_MODEL = "gpt-5-mini"
 
 BACKGROUND_IMAGE_PATH = Path("images/AdobeStock_506577005.jpeg")
 LOGO_IMAGE_PATH = Path("images/animation_pulse_Default_7kigl22lw.gif")
@@ -95,8 +98,7 @@ def _init_state() -> None:
         st.session_state[SS_SOURCE_DOC] = None
     if SS_AI_FOLLOWUPS not in st.session_state:
         st.session_state[SS_AI_FOLLOWUPS] = {}
-    if SS_MODEL not in st.session_state:
-        st.session_state[SS_MODEL] = "gpt-5-mini"
+    st.session_state[SS_MODEL] = DEFAULT_MODEL
     if SS_USE_ESCO not in st.session_state:
         st.session_state[SS_USE_ESCO] = True
     if SS_AUTO_AI not in st.session_state:
@@ -109,6 +111,8 @@ def _init_state() -> None:
         st.session_state[SS_THEME] = THEME_LIGHT
     if SS_PENDING_ESCO_HARD_REQ not in st.session_state:
         st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
+    if SS_SHOW_REQUIRED_WARNING not in st.session_state:
+        st.session_state[SS_SHOW_REQUIRED_WARNING] = False
 
 
 def _reset_session() -> None:
@@ -124,6 +128,7 @@ def _reset_session() -> None:
         SS_TRANSLATED,
         SS_JOB_AD_DRAFT,
         SS_THEME,
+        SS_SHOW_REQUIRED_WARNING,
     ]:
         st.session_state.pop(k, None)
     st.rerun()
@@ -358,9 +363,6 @@ def run_app() -> None:
             format_func=lambda x: t(lang, f"theme.{x}"),
             key=SS_THEME,
         )
-        model = st.text_input(
-            t(lang, "sidebar.model"), value=st.session_state[SS_MODEL], key=SS_MODEL
-        )
         st.session_state[SS_USE_ESCO] = st.checkbox(
             t(lang, "sidebar.use_esco"), value=st.session_state[SS_USE_ESCO]
         )
@@ -369,6 +371,8 @@ def run_app() -> None:
         )
         if st.button(t(lang, "sidebar.reset")):
             _reset_session()
+
+    model = st.session_state[SS_MODEL]
 
     # Apply theme and branding
     _apply_theme(theme)
@@ -381,9 +385,10 @@ def run_app() -> None:
     missing = missing_required(profile)
     progress = 1.0 - (len(missing) / max(1, len(REQUIRED_FIELDS)))
     st.progress(progress)
-    if missing:
+    missing_warning_enabled = bool(st.session_state.get(SS_SHOW_REQUIRED_WARNING))
+    if missing and missing_warning_enabled:
         st.warning(f"{t(lang, 'progress.missing_required')}: {', '.join(missing)}")
-    else:
+    elif not missing:
         st.success(t(lang, "progress.ready"))
 
     # Top navigation: horizontal radio for steps
@@ -408,6 +413,7 @@ def run_app() -> None:
     with nav_cols[2]:
         st.button(
             t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review"
+
         )
 
     st.divider()

@@ -9,6 +9,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - **Bilingual UI:** Use the sidebar language selector to switch between German and English labels. The final job ad draft will be generated in the chosen language.
 - **English field translation:** In the "Skills" step, you can automatically translate key fields (job title, required hard/soft skills, tools) to English by clicking the **"AI: Generate English versions"** button. This uses the OpenAI API to fill optional English fields (marked as "*English version, optional*"). If you switch the UI language to English, these translated values will be used in the job ad output.
 - **Dynamic forms:** Each step groups a set of questions (basic and optional advanced fields). Advanced fields are hidden under *"More details (optional)"* to keep the UI uncluttered. Conditional fields (e.g., travel percentage if travel is required) only appear when relevant.
+- **Calm validation:** Required-field warnings stay hidden on initial load and only appear after you attempt an action where the missing inputs matter (e.g., clicking **Next** with empty required fields). This avoids surprising users with alerts before they start.
 - **Session state:** Form data persists in `st.session_state` as you navigate. You can reset the session via the sidebar.
 
 ## Branding & layout
@@ -28,6 +29,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - **Field extraction:** In the *Import* step, if an OpenAI API key is configured, the app will attempt to extract structured information from the provided job ad text using an LLM (via OpenAI model **gpt-5-mini**). Detected fields (e.g. company contact email or website) are prefilled with a provenance tag "Extracted". This speeds up the form-filling process.
 - **Follow-up questions:** At each step, you can click **"AI: Generate suggestions"** to have the LLM propose follow-up questions for any missing or uncertain fields. These AI-generated questions (in both DE and EN) will appear below the form, allowing you to fill in additional details. This feature is optional and only triggers if relevant fields are missing. You can also enable auto-generation of follow-ups via the sidebar ("Suggest AI follow-ups automatically").
 - **English translation:** As noted, the LLM can translate key fields to English for international job ads. The translated values are stored in parallel fields (e.g., `job_title_en`) and used when you switch to English output.
+- **Fixed model selection:** The app always uses OpenAI **gpt-5-mini** for extraction, follow-ups, and translations; the sidebar no longer exposes a model selector to avoid accidental misconfiguration.
 - **Model compatibility:** The Responses API for **gpt-5-mini** does not accept a `temperature` parameter. The app therefore relies on the model defaults and omits unsupported sampling parameters to avoid HTTP 400 errors during extraction, follow-up generation, and translation.
 
 ## Configuration
