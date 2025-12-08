@@ -47,7 +47,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - In the **Review & Export** step, a dedicated *Salary prediction* card lists key profile fields (seniority, location, work policy, contract/employment type, industry, size, currency).
 - Use the checkboxes to explicitly choose which values should drive the estimate; the UI shows the current value of each field so you can see what will be applied.
 - Click **“Gehaltsprognose berechnen”** to trigger the calculation once you are happy with the selection—this avoids re-running the heuristic on every small edit.
-- The app stores the used parameters, shows the predicted range (lower/upper bound), and provides a rationale based on the multipliers that were applied (e.g., city premium, part-time discount, contract type).
+- The app stores the used parameters, shows the predicted range (lower/upper bound), visualises the min/avg/max band in a theme-aware chart, and provides a short bilingual rationale based on the applied multipliers (e.g., city premium, part-time discount, contract type).
 
 ## Configuration
 

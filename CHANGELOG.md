@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a themed salary visualization (min/avg/max) plus bilingual AI rationale beneath the checkbox selection, making the prediction easier to interpret alongside the applied factors.
 - Added a selectable salary prediction section that gathers marked profile fields, triggers calculation on demand, and explains the resulting range via applied heuristics.
 - Added flexible job-ad intake supporting URL fetches with HTML parsing, PDF/DOCX uploads, and pasted text inputs to prefill the wizard.
 - Added bilingual multi-step wizard UI with per-step validation, navigation, and review before job-ad generation.
