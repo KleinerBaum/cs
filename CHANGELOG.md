@@ -10,3 +10,4 @@
 - Fixed the theme toggle to rely on the selectbox return value instead of manual session-state writes, preventing Streamlit errors when switching modes.
 - Removed the unsupported `temperature` parameter from GPT-5-mini Responses API calls to avoid HTTP 400 errors during extraction, follow-up generation, and translation.
 - Fixed the OpenAI model to `gpt-5-mini` and removed the sidebar model selector to avoid misconfiguration.
+
