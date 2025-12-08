@@ -470,7 +470,7 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
 
     # After extraction, move to first form step (Company)
     st.session_state[SS_STEP] = "company"
-    st.experimental_rerun()
+    st.rerun()
 
 def _render_questions_step(
     profile: dict[str, Any],
