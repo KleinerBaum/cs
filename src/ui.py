@@ -30,12 +30,13 @@ from .llm_prompts import (
     translate_user_prompt,
 )
 from .profile import (
+    Provenance,
     clear_field,
     get_record,
     get_value,
+    is_missing_value,
     missing_required,
     new_profile,
-    Provenance,
     set_field,
     to_json,
     update_source_language,
@@ -45,6 +46,7 @@ from .question_engine import (
     STEPS,
     iter_missing_optional,
     missing_required_for_step,
+    question_bank,
     question_help,
     question_label,
     select_questions_for_step,
@@ -182,6 +184,11 @@ def _go_prev() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx > 0:
         st.session_state[SS_STEP] = STEPS[idx - 1]
+
+
+def _jump_to_step(step: str) -> None:
+    _set_step(step)
+    st.rerun()
 
 
 def _apply_theme(theme: str) -> None:
@@ -412,15 +419,64 @@ def _render_branding(image_path: Path) -> None:
         )
 
 
+def _format_sidebar_value(value: Any, lang: str) -> str:
+    if is_missing_value(value):
+        return t(lang, "ui.empty")
+    if isinstance(value, list):
+        cleaned = [str(v).strip() for v in value if str(v).strip()]
+        return ", ".join(cleaned) if cleaned else t(lang, "ui.empty")
+    if isinstance(value, bool):
+        return t(lang, "ui.boolean_yes") if value else t(lang, "ui.boolean_no")
+    if isinstance(value, dict):
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except TypeError:
+            return str(value)
+    return str(value)
+
+
+def _render_sidebar_overview(*, lang: str, profile: dict[str, Any]) -> None:
+    st.markdown(
+        f"""
+        <div class="cs-sidebar-card">
+            <div class="cs-sidebar-section-title">📑 {t(lang, "sidebar.overview")}</div>
+            <hr class="cs-sidebar-divider" />
+        """,
+        unsafe_allow_html=True,
+    )
+    step_labels = {step: t(lang, _STEP_LABEL_KEYS.get(step, step)) for step in STEPS}
+    for step in STEPS:
+        questions = [
+            q
+            for q in question_bank()
+            if q.step == step and (not q.show_if or q.show_if(profile))
+        ]
+        if not questions:
+            continue
+        expander = st.expander(step_labels.get(step, step), expanded=False)
+        with expander:
+            st.button(
+                f"↪️ {t(lang, 'sidebar.jump_to_step')}",
+                key=f"jump-step-{step}",
+                on_click=_jump_to_step,
+                args=(step,),
+            )
+            for q in questions:
+                label = question_label(q, lang)
+                value = _format_sidebar_value(get_value(profile, q.path), lang)
+                st.markdown(f"**{label}:** {value}")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
     """Render a structured sidebar with themed sections and controls."""
     with st.sidebar:
-        st.markdown("<div class=\"cs-sidebar-shell\">", unsafe_allow_html=True)
+        st.markdown('<div class="cs-sidebar-shell">', unsafe_allow_html=True)
         st.markdown(
             f"""
             <div class="cs-sidebar-card">
-                <div class="cs-sidebar-card-heading">🧭 {t(lang, 'sidebar.title')}</div>
-                <p class="cs-sidebar-card-subtitle">{t(lang, 'sidebar.subtitle')}</p>
+                <div class="cs-sidebar-card-heading">🧭 {t(lang, "sidebar.title")}</div>
+                <p class="cs-sidebar-card-subtitle">{t(lang, "sidebar.subtitle")}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -428,7 +484,7 @@ def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
         st.markdown(
             f"""
             <div class="cs-sidebar-card">
-                <div class="cs-sidebar-section-title">🎨 {t(lang, 'sidebar.section.display')}</div>
+                <div class="cs-sidebar-section-title">🎨 {t(lang, "sidebar.section.display")}</div>
                 <hr class="cs-sidebar-divider" />
             """,
             unsafe_allow_html=True,
@@ -448,7 +504,7 @@ def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
         )
         st.markdown(
             f"""
-                <div class="cs-sidebar-section-title" style="margin-top:0.35rem;">🧠 {t(lang, 'sidebar.section.assistants')}</div>
+                <div class="cs-sidebar-section-title" style="margin-top:0.35rem;">🧠 {t(lang, "sidebar.section.assistants")}</div>
                 <hr class="cs-sidebar-divider" />
             """,
             unsafe_allow_html=True,
@@ -464,7 +520,7 @@ def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
         st.markdown(
             f"""
             <div class="cs-sidebar-card">
-                <div class="cs-sidebar-section-title">⚡ {t(lang, 'sidebar.section.actions')}</div>
+                <div class="cs-sidebar-section-title">⚡ {t(lang, "sidebar.section.actions")}</div>
                 <hr class="cs-sidebar-divider" />
             """,
             unsafe_allow_html=True,
@@ -472,6 +528,7 @@ def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
         if st.button(f"♻️ {t(lang, 'sidebar.reset')}", use_container_width=True):
             _reset_session()
         st.markdown("</div>", unsafe_allow_html=True)
+        _render_sidebar_overview(lang=lang, profile=profile)
         st.markdown("</div>", unsafe_allow_html=True)
 
     return theme
@@ -533,7 +590,6 @@ def run_app() -> None:
     with nav_cols[2]:
         st.button(
             t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review"
-
         )
 
     st.divider()
