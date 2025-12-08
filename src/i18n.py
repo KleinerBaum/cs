@@ -14,6 +14,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "sidebar.use_esco": "ESCO-Vorschläge aktivieren",
         "sidebar.auto_ai": "AI-Follow-ups automatisch vorschlagen",
         "sidebar.reset": "Session zurücksetzen",
+        "sidebar.overview": "Eingabe-Übersicht",
+        "sidebar.jump_to_step": "Zum Schritt",
         "sidebar.subtitle": "Passe Anzeige, Sprache und Helfer nach Bedarf an.",
         "sidebar.section.display": "Anzeige & Sprache",
         "sidebar.section.assistants": "Automatische Helfer",
@@ -58,6 +60,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ui.translate_hint": "EN-Felder werden genutzt, wenn du UI/Output auf Englisch stellst.",
         "ui.ai_hint": "AI-Follow-ups erscheinen nur bei Lücken/Unsicherheiten und bleiben optional.",
         "ui.ai_followups_title": "AI-Follow-ups",
+        "ui.boolean_yes": "Ja",
+        "ui.boolean_no": "Nein",
         "ai.followups_done": "AI-Follow-ups erstellt",
         "ai.followups_failed": "AI-Follow-ups fehlgeschlagen",
         "ui.esco_search": "ESCO: Suche",
@@ -97,6 +101,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "sidebar.use_esco": "Enable ESCO suggestions",
         "sidebar.auto_ai": "Suggest AI follow-ups automatically",
         "sidebar.reset": "Reset session",
+        "sidebar.overview": "Input overview",
+        "sidebar.jump_to_step": "Go to step",
         "sidebar.subtitle": "Adjust display, language, and assistants as needed.",
         "sidebar.section.display": "Display & language",
         "sidebar.section.assistants": "Automated assistants",
@@ -141,6 +147,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ui.translate_hint": "EN fields will be used if you switch the UI/output to English.",
         "ui.ai_hint": "AI follow-ups appear only for gaps/uncertainties and are optional.",
         "ui.ai_followups_title": "AI follow-ups",
+        "ui.boolean_yes": "Yes",
+        "ui.boolean_no": "No",
         "ai.followups_done": "AI follow-ups created",
         "ai.followups_failed": "AI follow-ups failed",
         "ui.esco_search": "ESCO: Search",
@@ -174,15 +182,20 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
 }
 
+
 def t(lang: str, key: str, *fmt_args: Any) -> str:
     """Translate a given key into the selected language, formatting if needed."""
     lang_map = _STRINGS.get(lang)
-    text = (lang_map.get(key) if lang_map else None) or _STRINGS[LANG_EN].get(key, str(key))
+    text = (lang_map.get(key) if lang_map else None) or _STRINGS[LANG_EN].get(
+        key, str(key)
+    )
     return text if not fmt_args else text.format(*fmt_args)
+
 
 def as_lang(lang_raw: str) -> str:
     """Return a supported language code ('de' or 'en'), defaulting to 'de'."""
     return lang_raw if lang_raw in SUPPORTED_LANGS else LANG_DE
+
 
 def option_label(lang: str, group: str, value: str) -> str:
     """Friendly label for enumerated option values, based on language."""
