@@ -84,6 +84,7 @@ _STEP_LABEL_KEYS = {
     "review": "step.review",
 }
 
+
 def _init_state() -> None:
     # Initialize session state for multi-step progress
     if SS_STEP not in st.session_state:
@@ -109,6 +110,7 @@ def _init_state() -> None:
     if SS_PENDING_ESCO_HARD_REQ not in st.session_state:
         st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
 
+
 def _reset_session() -> None:
     # Clear all relevant session keys and restart
     for k in [
@@ -126,9 +128,11 @@ def _reset_session() -> None:
         st.session_state.pop(k, None)
     st.rerun()
 
+
 def _get_lang() -> str:
     # Determine current UI language from session (default to DE)
     return as_lang(st.session_state.get("ui_lang", LANG_DE))
+
 
 def _resolve_api_key() -> str | None:
     """Return the configured OpenAI API key without exposing it in the UI."""
@@ -150,9 +154,11 @@ def _resolve_api_key() -> str | None:
         return env_key
     return None
 
+
 def _set_step(step: str) -> None:
     if step in STEPS:
         st.session_state[SS_STEP] = step
+
 
 def _step_index(step: str) -> int:
     try:
@@ -160,24 +166,29 @@ def _step_index(step: str) -> int:
     except ValueError:
         return 0
 
+
 def _go_next() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx < len(STEPS) - 1:
         st.session_state[SS_STEP] = STEPS[idx + 1]
+
 
 def _go_prev() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx > 0:
         st.session_state[SS_STEP] = STEPS[idx - 1]
 
+
 def _apply_theme(theme: str) -> None:
     # Apply a custom light/dark theme via CSS variables
     css_light = """
     :root {
-        --cs-bg: #ffffff;
-        --cs-text: #111827;
-        --cs-surface: #f8fafc;
-        --cs-primary: #2563eb;
+        --cs-bg: #f6f8fb;
+        --cs-text: #0b1220;
+        --cs-surface: #e7ebf3;
+        --cs-surface-strong: #d8deea;
+        --cs-primary: #1f7a8c;
+        --cs-accent: #5eead4;
     }
     body {
         background-color: var(--cs-bg);
@@ -188,6 +199,22 @@ def _apply_theme(theme: str) -> None:
     }
     .stSidebar, .sidebar-content {
         background: var(--cs-surface);
+    }
+    .stButton>button, .stDownloadButton>button {
+        background: linear-gradient(135deg, var(--cs-primary), var(--cs-accent));
+        border: none;
+        color: #0b1220;
+        font-weight: 600;
+        box-shadow: 0 10px 30px rgba(31, 122, 140, 0.18);
+        transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .stButton>button:hover, .stDownloadButton>button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 38px rgba(31, 122, 140, 0.25);
+    }
+    .stButton>button:focus-visible, .stDownloadButton>button:focus-visible {
+        outline: 2px solid var(--cs-primary);
+        outline-offset: 2px;
     }
     .stButton>button {
         border-radius: 0.25rem;
@@ -195,10 +222,12 @@ def _apply_theme(theme: str) -> None:
     """
     css_dark = """
     :root {
-        --cs-bg: #0f172a;
-        --cs-text: #f8fafc;
-        --cs-surface: #1e293b;
-        --cs-primary: #2563eb;
+        --cs-bg: #0c1626;
+        --cs-text: #e5e7eb;
+        --cs-surface: #111c2f;
+        --cs-surface-strong: #1f2b3e;
+        --cs-primary: #1f7a8c;
+        --cs-accent: #5eead4;
     }
     body {
         background-color: var(--cs-bg);
@@ -210,12 +239,29 @@ def _apply_theme(theme: str) -> None:
     .stSidebar, .sidebar-content {
         background: var(--cs-surface);
     }
+    .stButton>button, .stDownloadButton>button {
+        background: linear-gradient(135deg, var(--cs-primary), var(--cs-accent));
+        border: none;
+        color: #0b1220;
+        font-weight: 600;
+        box-shadow: 0 10px 30px rgba(94, 234, 212, 0.18);
+        transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .stButton>button:hover, .stDownloadButton>button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 38px rgba(94, 234, 212, 0.28);
+    }
+    .stButton>button:focus-visible, .stDownloadButton>button:focus-visible {
+        outline: 2px solid var(--cs-accent);
+        outline-offset: 2px;
+    }
     .stButton>button {
         border-radius: 0.25rem;
     }
     """
     style = css_light if theme == THEME_LIGHT else css_dark
     st.write(f"<style>{style}</style>", unsafe_allow_html=True)
+
 
 def _apply_background(image_path: Path) -> None:
     # Set a fixed background image (with overlay handled in CSS in the image file itself)
@@ -233,17 +279,53 @@ def _apply_background(image_path: Path) -> None:
             unsafe_allow_html=True,
         )
 
+
 def _render_branding(image_path: Path) -> None:
     # Render a small pulsating logo image in the top-right corner
     if image_path.exists():
         st.markdown(
             f"""
-            <div style="position: absolute; top: 1rem; right: 1rem;">
-                <img src="data:image/gif;base64,{base64.b64encode(image_path.read_bytes()).decode()}" alt="Logo">
+            <style>
+                .cs-brand-badge {{
+                    position: fixed;
+                    top: 1rem;
+                    right: 1rem;
+                    width: 7.5rem;
+                    height: 7.5rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--cs-surface, #ffffff);
+                    border-radius: 1rem;
+                    box-shadow: 0 14px 42px rgba(0, 0, 0, 0.12);
+                    z-index: 1000;
+                }}
+                .cs-brand-badge img {{
+                    width: 5.5rem;
+                    height: 5.5rem;
+                    object-fit: contain;
+                }}
+                @media (max-width: 768px) {{
+                    .cs-brand-badge {{
+                        right: 50%;
+                        transform: translateX(50%);
+                        width: 6.25rem;
+                        height: 6.25rem;
+                        top: 0.5rem;
+                    }}
+                    .cs-brand-badge img {{
+                        width: 4.5rem;
+                        height: 4.5rem;
+                    }}
+                }}
+            </style>
+            <div class="cs-brand-badge">
+                <img src="data:image/gif;base64,{base64.b64encode(image_path.read_bytes()).decode()}" alt="Logo" />
             </div>
             """,
             unsafe_allow_html=True,
         )
+
 
 def run_app() -> None:
     st.set_page_config(page_title="Need Analysis Wizard", page_icon="🧭", layout="wide")
@@ -320,9 +402,13 @@ def run_app() -> None:
     # Prev/Next navigation buttons
     nav_cols = st.columns([1, 6, 1])
     with nav_cols[0]:
-        st.button(t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake")
+        st.button(
+            t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake"
+        )
     with nav_cols[2]:
-        st.button(t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review")
+        st.button(
+            t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review"
+        )
 
     st.divider()
 
@@ -334,9 +420,14 @@ def run_app() -> None:
         _render_review(profile, lang=lang)
         return
 
-    _render_questions_step(profile, step=current_step, api_key=api_key, model=model, lang=lang)
+    _render_questions_step(
+        profile, step=current_step, api_key=api_key, model=model, lang=lang
+    )
 
-def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: str) -> None:
+
+def _render_intake(
+    profile: dict[str, Any], *, api_key: str, model: str, lang: str
+) -> None:
     st.markdown(f"## {t(lang, 'intake.title')}")
     st.caption(t(lang, "intake.subtitle"))
     url = st.text_input(t(lang, "intake.url"), placeholder="https://…")
@@ -471,6 +562,7 @@ def _render_intake(profile: dict[str, Any], *, api_key: str, model: str, lang: s
     st.session_state[SS_STEP] = "company"
     st.rerun()
 
+
 def _render_questions_step(
     profile: dict[str, Any],
     step: str,
@@ -488,7 +580,9 @@ def _render_questions_step(
     _render_question_list(profile, primary, step=step, lang=lang)
 
     with st.expander(t(lang, "ui.more_details"), expanded=False):
-        _render_question_list(profile, more, step=step, lang=lang, advanced_section=True)
+        _render_question_list(
+            profile, more, step=step, lang=lang, advanced_section=True
+        )
 
         # Optional: generate English variants for key fields (title + skills/tools)
         if step == "skills":
@@ -534,6 +628,7 @@ def _render_questions_step(
         st.markdown(f"### {t(lang, 'ui.ai_followups_title')}")
         for i, q in enumerate(fu, start=1):
             _render_ai_followup(profile, q, step=step, idx=i, lang=lang)
+
 
 def _render_question_list(
     profile: dict[str, Any],
@@ -628,7 +723,9 @@ def _render_question_list(
             st.text_area(
                 label,
                 value=list_to_multiline(
-                    raw_list if isinstance(raw_list, list) else multiline_to_list(str(raw_list or ""))
+                    raw_list
+                    if isinstance(raw_list, list)
+                    else multiline_to_list(str(raw_list or ""))
                 ),
                 help=help_txt or None,
                 key=widget_key,
@@ -644,8 +741,10 @@ def _render_question_list(
                 on_change=partial(_on_widget_change, q.path, "text", widget_key),
             )
 
+
 def _queue_esco_skills(skills: list[str]) -> None:
     st.session_state[SS_PENDING_ESCO_HARD_REQ] = skills
+
 
 def _apply_pending_esco_skills(profile: dict[str, Any], *, lang: str) -> None:
     pending = st.session_state.get(SS_PENDING_ESCO_HARD_REQ) or []
@@ -668,6 +767,7 @@ def _apply_pending_esco_skills(profile: dict[str, Any], *, lang: str) -> None:
     )
     st.session_state[SS_PROFILE] = profile
     st.success(t(lang, "esco.apply_success"))
+
 
 def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
     profile: dict[str, Any] = st.session_state[SS_PROFILE]
@@ -707,8 +807,11 @@ def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
         if not value:
             clear_field(profile, path)
             return
-    set_field(profile, path, value, provenance="user", confidence=1.0, evidence="user_input")
+    set_field(
+        profile, path, value, provenance="user", confidence=1.0, evidence="user_input"
+    )
     st.session_state[SS_PROFILE] = profile
+
 
 def _generate_ai_followups(
     step: str, api_key: str, model: str, lang: str, silent: bool = False
@@ -769,6 +872,7 @@ def _generate_ai_followups(
         if not silent:
             st.error(f"{t(lang, 'ai.followups_failed')}: {e}")
 
+
 def _render_ai_followup(
     profile: dict[str, Any], q: dict[str, Any], *, step: str, idx: int, lang: str
 ) -> None:
@@ -791,13 +895,19 @@ def _render_ai_followup(
         st.text_area(
             question,
             value=list_to_multiline(
-                raw_list if isinstance(raw_list, list) else multiline_to_list(str(raw_list or ""))
+                raw_list
+                if isinstance(raw_list, list)
+                else multiline_to_list(str(raw_list or ""))
             ),
             height=120,
             key=widget_key,
             on_change=partial(_on_widget_change, path, "list", widget_key),
         )
-    elif answer_type == "select" and isinstance(q.get("options"), list) and q.get("options"):
+    elif (
+        answer_type == "select"
+        and isinstance(q.get("options"), list)
+        and q.get("options")
+    ):
         opts = [""] + list(q["options"])
         st.selectbox(
             question,
@@ -813,6 +923,7 @@ def _render_ai_followup(
             on_change=partial(_on_widget_change, path, "text", widget_key),
         )
 
+
 def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
     st.markdown(f"#### {t(lang, 'esco.title')}")
     default_query = str(get_value(profile, Keys.POSITION_TITLE) or "").strip()
@@ -824,7 +935,9 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
     with col1:
         do_search = st.button(t(lang, "ui.esco_search"), key="esco_search_btn")
     with col2:
-        st.caption(f"{t(lang, 'esco.caption')} · {t(lang, 'esco.lang_hint').format(query_lang)}")
+        st.caption(
+            f"{t(lang, 'esco.caption')} · {t(lang, 'esco.lang_hint').format(query_lang)}"
+        )
     if do_search:
         try:
             results = search_occupations(query, language=query_lang, limit=10)
@@ -845,11 +958,27 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
         picked = results[choice] if choice is not None else None
         if picked:
             # Store chosen occupation in profile (URI and label)
-            set_field(profile, Keys.ESCO_OCCUPATION_URI, picked["uri"], provenance="user", confidence=1.0, evidence="esco_pick")
-            set_field(profile, Keys.ESCO_OCCUPATION_LABEL, picked["label"], provenance="user", confidence=1.0, evidence="esco_pick")
+            set_field(
+                profile,
+                Keys.ESCO_OCCUPATION_URI,
+                picked["uri"],
+                provenance="user",
+                confidence=1.0,
+                evidence="esco_pick",
+            )
+            set_field(
+                profile,
+                Keys.ESCO_OCCUPATION_LABEL,
+                picked["label"],
+                provenance="user",
+                confidence=1.0,
+                evidence="esco_pick",
+            )
             if st.button(t(lang, "ui.esco_apply_skills"), key="esco_apply_btn"):
                 try:
-                    skills = occupation_related_skills(picked["uri"], language=query_lang)
+                    skills = occupation_related_skills(
+                        picked["uri"], language=query_lang
+                    )
                     st.session_state["esco_skills"] = skills
                     set_field(
                         profile,
@@ -882,6 +1011,7 @@ def _render_esco_sidebar(profile: dict[str, Any], *, lang: str) -> None:
             st.caption(t(lang, "esco.apply_hint"))
     # After applying, if any pending skills are queued, integrate into profile
     _apply_pending_esco_skills(profile, lang=lang)
+
 
 def _translate_fields_to_english(
     profile: dict[str, Any], *, api_key: str, model: str, lang: str
@@ -935,6 +1065,7 @@ def _translate_fields_to_english(
     except Exception as e:
         st.error(f"{t(lang, 'ui.translate_failed')}: {e}")
 
+
 def _render_review(profile: dict[str, Any], *, lang: str) -> None:
     st.markdown(f"## {t(lang, 'review.title')}")
     st.caption(t(lang, "review.edit_hint"))
@@ -984,6 +1115,8 @@ def _render_review(profile: dict[str, Any], *, lang: str) -> None:
     if extracted or suggested:
         st.markdown(f"### {t(lang, 'review.provenance_title')}")
         if extracted:
-            st.write(f"{t(lang, 'review.provenance_extracted')}: ", ", ".join(extracted))
+            st.write(
+                f"{t(lang, 'review.provenance_extracted')}: ", ", ".join(extracted)
+            )
         if suggested:
             st.write(f"{t(lang, 'review.provenance_ai')}: ", ", ".join(suggested))
