@@ -65,6 +65,7 @@ SS_TRANSLATED = "translated_once"
 SS_JOB_AD_DRAFT = "job_ad_draft"
 SS_THEME = "ui_theme"
 SS_PENDING_ESCO_HARD_REQ = "pending_esco_hard_req"
+SS_SHOW_REQUIRED_WARNING = "show_required_warning"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
@@ -108,6 +109,8 @@ def _init_state() -> None:
         st.session_state[SS_THEME] = THEME_LIGHT
     if SS_PENDING_ESCO_HARD_REQ not in st.session_state:
         st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
+    if SS_SHOW_REQUIRED_WARNING not in st.session_state:
+        st.session_state[SS_SHOW_REQUIRED_WARNING] = False
 
 def _reset_session() -> None:
     # Clear all relevant session keys and restart
@@ -122,6 +125,7 @@ def _reset_session() -> None:
         SS_TRANSLATED,
         SS_JOB_AD_DRAFT,
         SS_THEME,
+        SS_SHOW_REQUIRED_WARNING,
     ]:
         st.session_state.pop(k, None)
     st.rerun()
@@ -164,6 +168,11 @@ def _go_next() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx < len(STEPS) - 1:
         st.session_state[SS_STEP] = STEPS[idx + 1]
+
+
+def _go_next_with_warning_flag() -> None:
+    st.session_state[SS_SHOW_REQUIRED_WARNING] = True
+    _go_next()
 
 def _go_prev() -> None:
     idx = _step_index(st.session_state[SS_STEP])
@@ -299,9 +308,10 @@ def run_app() -> None:
     missing = missing_required(profile)
     progress = 1.0 - (len(missing) / max(1, len(REQUIRED_FIELDS)))
     st.progress(progress)
-    if missing:
+    missing_warning_enabled = bool(st.session_state.get(SS_SHOW_REQUIRED_WARNING))
+    if missing and missing_warning_enabled:
         st.warning(f"{t(lang, 'progress.missing_required')}: {', '.join(missing)}")
-    else:
+    elif not missing:
         st.success(t(lang, "progress.ready"))
 
     # Top navigation: horizontal radio for steps
@@ -322,7 +332,11 @@ def run_app() -> None:
     with nav_cols[0]:
         st.button(t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake")
     with nav_cols[2]:
-        st.button(t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review")
+        st.button(
+            t(lang, "nav.next"),
+            on_click=_go_next_with_warning_flag,
+            disabled=current_step == "review",
+        )
 
     st.divider()
 

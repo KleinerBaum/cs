@@ -9,6 +9,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - **Bilingual UI:** Use the sidebar language selector to switch between German and English labels. The final job ad draft will be generated in the chosen language.
 - **English field translation:** In the "Skills" step, you can automatically translate key fields (job title, required hard/soft skills, tools) to English by clicking the **"AI: Generate English versions"** button. This uses the OpenAI API to fill optional English fields (marked as "*English version, optional*"). If you switch the UI language to English, these translated values will be used in the job ad output.
 - **Dynamic forms:** Each step groups a set of questions (basic and optional advanced fields). Advanced fields are hidden under *"More details (optional)"* to keep the UI uncluttered. Conditional fields (e.g., travel percentage if travel is required) only appear when relevant.
+- **Calm validation:** Required-field warnings stay hidden on initial load and only appear after you attempt an action where the missing inputs matter (e.g., clicking **Next** with empty required fields). This avoids surprising users with alerts before they start.
 - **Session state:** Form data persists in `st.session_state` as you navigate. You can reset the session via the sidebar.
 
 ## Branding & layout
