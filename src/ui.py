@@ -24,16 +24,20 @@ from .llm_prompts import (
     EXTRACTION_INSTRUCTIONS,
     FILL_MISSING_INSTRUCTIONS,
     FOLLOWUP_INSTRUCTIONS,
+    SUGGEST_MISSING_INSTRUCTIONS,
     TRANSLATE_INSTRUCTIONS,
     LLMClient,
     extraction_user_prompt,
     fill_missing_fields_prompt,
     followup_user_prompt,
     safe_parse_json,
+    suggest_missing_fields_prompt,
     translate_user_prompt,
 )
 from .profile import (
+    Provenance,
     clear_field,
+    flatten_values,
     get_record,
     get_value,
     is_missing,
@@ -95,6 +99,8 @@ PRIORITY_REQUIRED_PATHS = [
     Keys.LOCATION_CITY,
     Keys.LANG_REQ,
 ]
+
+MAX_SUGGESTION_PATHS = 12
 
 _EMPLOYMENT_TYPE_KEYWORDS: dict[str, str] = {
     "vollzeit": "full_time",
@@ -255,6 +261,7 @@ def _apply_extracted_fields(
     entries: list[Any],
     *,
     evidence: str,
+    provenance: Provenance = "extracted",
 ) -> int:
     updates = 0
     for entry in entries:
@@ -267,7 +274,7 @@ def _apply_extracted_fields(
             profile,
             path,
             val,
-            provenance="extracted",
+            provenance=provenance,
             confidence=conf if isinstance(conf, (int, float)) else None,
             evidence=evidence,
         ):
@@ -393,6 +400,18 @@ def _heuristic_fill_required_fields(
         ):
             updates += 1
     return updates
+
+
+def _collect_paths_for_ai_suggestions(profile: dict[str, Any]) -> list[str]:
+    missing: list[str] = []
+    for path in sorted(REQUIRED_FIELDS):
+        if is_missing(profile, path):
+            missing.append(path)
+    optional_paths = [q.path for q in question_bank() if not q.required]
+    for path in optional_paths:
+        if is_missing(profile, path):
+            missing.append(path)
+    return _dedupe_preserve_order(missing)
 
 
 def _set_step(step: str) -> None:
@@ -1056,6 +1075,7 @@ def _render_intake(
         )
         data = safe_parse_json(raw)
         updates = 0
+        suggestion_updates = 0
         extracted_fields: list[Any] = []
         if isinstance(data, dict):
             extracted_fields = data.get("fields") or []
@@ -1098,9 +1118,41 @@ def _render_intake(
                 updates += _apply_extracted_fields(
                     profile, fill_fields, evidence="llm_missing_recovery"
                 )
+        suggestion_paths = _collect_paths_for_ai_suggestions(profile)[
+            :MAX_SUGGESTION_PATHS
+        ]
+        if suggestion_paths:
+            suggestion_context: dict[str, Any] = {
+                "fields": extracted_fields,
+                "profile_values": flatten_values(profile),
+            }
+            if isinstance(data, dict):
+                suggestion_context["detected_language"] = data.get("detected_language")
+            suggest_raw = client.text(
+                suggest_missing_fields_prompt(
+                    missing_paths=suggestion_paths,
+                    extracted_context=suggestion_context,
+                    source_text=source_excerpt,
+                    source_name=source_doc.name,
+                ),
+                instructions=SUGGEST_MISSING_INSTRUCTIONS,
+                max_output_tokens=800,
+            )
+            suggest_data = safe_parse_json(suggest_raw)
+            if isinstance(suggest_data, dict):
+                suggested_fields = suggest_data.get("suggestions") or []
+                suggestion_updates = _apply_extracted_fields(
+                    profile,
+                    suggested_fields,
+                    evidence="llm_ai_suggestion",
+                    provenance="ai_suggestion",
+                )
+                updates += suggestion_updates
         st.session_state[SS_PROFILE] = profile
         st.success(t(lang, "intake.extract_done"))
         st.info(f"{t(lang, 'intake.updated_fields')}: {updates}")
+        if suggestion_updates:
+            st.info(t(lang, "ai.suggestions_done").format(suggestion_updates))
     except Exception as e:
         st.error(f"{t(lang, 'intake.extract_failed')}: {e}")
 
