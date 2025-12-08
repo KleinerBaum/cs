@@ -67,7 +67,7 @@ from .salary_prediction import (
     collect_salary_factors,
     predict_salary_range,
 )
-from .settings import APP_NAME, MAX_SOURCE_TEXT_CHARS
+from .settings import APP_NAME, DEFAULT_MODEL, MAX_SOURCE_TEXT_CHARS, configured_model
 from .utils import extract_emails, extract_urls, list_to_multiline, multiline_to_list
 
 # Session state keys
@@ -89,8 +89,6 @@ SS_SALARY_NARRATIVE = "salary_prediction_narrative"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
-
-DEFAULT_MODEL = "gpt-5-mini"
 
 BACKGROUND_IMAGE_PATH = Path("images/AdobeStock_506577005.jpeg")
 LOGO_IMAGE_PATH = Path("images/animation_pulse_Default_7kigl22lw.gif")
@@ -191,7 +189,8 @@ def _init_state() -> None:
         st.session_state[SS_SOURCE_DOC] = None
     if SS_AI_FOLLOWUPS not in st.session_state:
         st.session_state[SS_AI_FOLLOWUPS] = {}
-    st.session_state[SS_MODEL] = DEFAULT_MODEL
+    if SS_MODEL not in st.session_state:
+        st.session_state[SS_MODEL] = configured_model()
     if SS_USE_ESCO not in st.session_state:
         st.session_state[SS_USE_ESCO] = True
     if SS_AUTO_AI not in st.session_state:
@@ -302,6 +301,24 @@ def _dedupe_preserve_order(items: list[str]) -> list[str]:
         seen.add(item)
         ordered.append(item)
     return ordered
+
+
+def _available_models(default_model: str) -> list[str]:
+    return _dedupe_preserve_order([default_model, DEFAULT_MODEL, "gpt-3.5-turbo"])
+
+
+def _safe_option_index(options: list[str], value: str) -> int:
+    try:
+        return options.index(value)
+    except ValueError:
+        return 0
+
+
+def _resolve_model_choice(default_model: str) -> str:
+    configured = st.session_state.get(SS_MODEL)
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    return default_model
 
 
 def _guess_job_title(source_doc: SourceDocument) -> str | None:
@@ -959,6 +976,7 @@ def _render_salary_prediction(
 
 def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
     """Render a structured sidebar with themed sections and controls."""
+    default_model = configured_model()
     with st.sidebar:
         st.markdown('<div class="cs-sidebar-shell">', unsafe_allow_html=True)
         st.markdown(
@@ -990,6 +1008,13 @@ def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
             options=[THEME_LIGHT, THEME_DARK],
             format_func=lambda x: t(lang, f"theme.{x}"),
             key=SS_THEME,
+        )
+        model_options = _available_models(default_model)
+        st.session_state[SS_MODEL] = st.selectbox(
+            f"🤖 {t(lang, 'sidebar.model')}",
+            options=model_options,
+            index=_safe_option_index(model_options, _resolve_model_choice(default_model)),
+            help=t(lang, "sidebar.model_help").format(default_model),
         )
         st.markdown(
             f"""
@@ -1038,7 +1063,7 @@ def run_app() -> None:
     api_key = cast(str, api_key)
 
     theme = _render_sidebar(lang=lang, profile=profile)
-    model = st.session_state[SS_MODEL]
+    model = _resolve_model_choice(configured_model())
 
     # Apply theme and branding
     _apply_theme(theme)
