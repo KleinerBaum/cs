@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a low-cost recovery call for intake parse/LLM failures that retries `fill_missing_fields_prompt` on prioritized paths with short backoff before falling back to heuristics.
 - Hardened intake parsing so ValueError from malformed LLM JSON triggers a bilingual warning with a raw-response snippet while continuing with fallback data instead of aborting the flow.
 - Removed duplicate field-constant module and legacy wizard catalog in favor of the centralized `src/keys.py` definitions and the active question engine.
 - Added a themed salary visualization (min/avg/max) plus bilingual AI rationale beneath the checkbox selection, making the prediction easier to interpret alongside the applied factors.
