@@ -6,8 +6,10 @@ import os
 import re
 from functools import partial
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Mapping, TypedDict, cast
 
+import altair as alt
+import pandas as pd
 import streamlit as st
 
 from .esco_client import ESCOError, occupation_related_skills, search_occupations
@@ -79,6 +81,7 @@ SS_PENDING_ESCO_HARD_REQ = "pending_esco_hard_req"
 SS_SHOW_REQUIRED_WARNING = "show_required_warning"
 SS_SALARY_FACTORS = "salary_factors"
 SS_SALARY_RESULT = "salary_prediction_result"
+SS_SALARY_NARRATIVE = "salary_prediction_narrative"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
@@ -167,6 +170,11 @@ SALARY_FACTOR_OPTIONS: tuple[tuple[str, str], ...] = (
 )
 
 
+class SalaryNarrative(TypedDict):
+    de: str
+    en: str
+
+
 def _init_state() -> None:
     # Initialize session state for multi-step progress
     if SS_STEP not in st.session_state:
@@ -201,6 +209,8 @@ def _init_state() -> None:
         }
     if SS_SALARY_RESULT not in st.session_state:
         st.session_state[SS_SALARY_RESULT] = None
+    if SS_SALARY_NARRATIVE not in st.session_state:
+        st.session_state[SS_SALARY_NARRATIVE] = None
 
 
 def _reset_session() -> None:
@@ -219,6 +229,7 @@ def _reset_session() -> None:
         SS_SHOW_REQUIRED_WARNING,
         SS_SALARY_FACTORS,
         SS_SALARY_RESULT,
+        SS_SALARY_NARRATIVE,
     ]:
         st.session_state.pop(k, None)
     st.rerun()
@@ -766,7 +777,102 @@ def _adjustment_label(adj: SalaryAdjustment, *, lang: str) -> str:
     return t(lang, "salary.breakdown.factor", label, pct_str, adj.value or "—")
 
 
-def _render_salary_prediction(profile: dict[str, Any], *, lang: str) -> None:
+def _render_salary_chart(
+    prediction: SalaryPrediction, *, lang: str, theme: str = THEME_LIGHT
+) -> None:
+    avg_salary = (prediction.min_salary + prediction.max_salary) / 2
+    df = pd.DataFrame(
+        [
+            {"label": t(lang, "salary.chart.min"), "value": prediction.min_salary},
+            {"label": t(lang, "salary.chart.avg"), "value": int(avg_salary)},
+            {"label": t(lang, "salary.chart.max"), "value": prediction.max_salary},
+        ]
+    )
+    bar_color = "#1f7a8c" if theme == THEME_LIGHT else "#5eead4"
+    text_color = "#0b1220" if theme == THEME_LIGHT else "#e5e7eb"
+    chart = (
+        alt.Chart(df)
+        .mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6)
+        .encode(
+            x=alt.X("label", sort=None, title=t(lang, "salary.chart.axis_label")),
+            y=alt.Y(
+                "value",
+                title=f"{t(lang, 'salary.chart.salary_axis')} ({prediction.currency})",
+            ),
+            tooltip=["label", "value"],
+            color=alt.value(bar_color),
+        )
+        .properties(height=260)
+        .configure_axis(labelColor=text_color, titleColor=text_color)
+        .configure_view(strokeWidth=0)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _fallback_salary_narrative(prediction: SalaryPrediction, *, lang: str) -> str:
+    adjustments = [adj for adj in prediction.adjustments if adj.factor != "base"]
+    adjustments.sort(key=lambda adj: abs(adj.multiplier - 1.0), reverse=True)
+    if not adjustments:
+        return t(lang, "salary.narrative_fallback")
+    highlights = [
+        t(lang, "salary.narrative_bullet", _adjustment_label(adj, lang=lang))
+        for adj in adjustments[:3]
+    ]
+    return "\n".join(highlights)
+
+
+def _generate_salary_narrative(
+    prediction: SalaryPrediction,
+    selected_factors: Mapping[str, Any],
+    *,
+    api_key: str,
+    model: str,
+) -> SalaryNarrative | None:
+    try:
+        top_adjustments = [
+            adj for adj in prediction.adjustments if adj.factor != "base"
+        ]
+        top_adjustments.sort(key=lambda adj: abs(adj.multiplier - 1.0), reverse=True)
+        adjustment_snapshot = [
+            {
+                "factor": adj.factor,
+                "multiplier": adj.multiplier,
+                "value": adj.value,
+            }
+            for adj in top_adjustments[:3]
+        ]
+        client = LLMClient(api_key=api_key, model=model)
+        prompt = (
+            "Create a concise bilingual explanation (German and English) for a salary "
+            "range prediction. Highlight the top drivers from the provided adjustments "
+            "and keep it to 2-3 sentences per language."
+            f"\nSalary range: {prediction.min_salary} - {prediction.max_salary}"
+            f" {prediction.currency}."
+            f"\nSelected factors: {json.dumps(selected_factors, ensure_ascii=False)}"
+            f"\nKey adjustments: {json.dumps(adjustment_snapshot, ensure_ascii=False)}"
+        )
+        instructions = (
+            "Respond ONLY with valid JSON following this schema:"
+            ' {"de": string, "en": string}.'
+            " Each value must be a short paragraph that mentions the range and the key"
+            " factors."
+        )
+        raw = client.text(prompt, instructions=instructions, max_output_tokens=320)
+        data = safe_parse_json(raw)
+        if not isinstance(data, dict):
+            return None
+        de_text = str(data.get("de") or "").strip()
+        en_text = str(data.get("en") or "").strip()
+        if not de_text or not en_text:
+            return None
+        return {"de": de_text, "en": en_text}
+    except Exception:
+        return None
+
+
+def _render_salary_prediction(
+    profile: dict[str, Any], *, lang: str, api_key: str, model: str, theme: str
+) -> None:
     st.markdown(f"### {t(lang, 'salary.section_title')}")
     st.caption(t(lang, "salary.section_hint"))
 
@@ -777,10 +883,17 @@ def _render_salary_prediction(profile: dict[str, Any], *, lang: str) -> None:
         selected_factors = collect_salary_factors(profile, selected_paths)
         if not selected_factors:
             st.session_state[SS_SALARY_RESULT] = None
+            st.session_state[SS_SALARY_NARRATIVE] = None
             st.warning(t(lang, "salary.no_values"))
         else:
             prediction = predict_salary_range(selected_factors)
             st.session_state[SS_SALARY_RESULT] = prediction.to_dict()
+            st.session_state[SS_SALARY_NARRATIVE] = _generate_salary_narrative(
+                prediction,
+                selected_factors,
+                api_key=api_key,
+                model=model,
+            )
             st.success(t(lang, "salary.prediction_done"))
 
     stored_prediction = _coerce_salary_prediction(
@@ -808,6 +921,21 @@ def _render_salary_prediction(profile: dict[str, Any], *, lang: str) -> None:
     st.markdown(f"**{t(lang, 'salary.breakdown_title')}**")
     for adj in stored_prediction.adjustments:
         st.write("- " + _adjustment_label(adj, lang=lang))
+
+    st.markdown(f"#### {t(lang, 'salary.chart_title')}")
+    _render_salary_chart(stored_prediction, lang=lang, theme=theme)
+    st.caption(t(lang, "salary.chart_caption"))
+
+    st.markdown(f"#### {t(lang, 'salary.narrative_title')}")
+    stored_narrative = st.session_state.get(SS_SALARY_NARRATIVE)
+    narrative_text = None
+    if isinstance(stored_narrative, dict):
+        narrative_text = stored_narrative.get(lang)
+    if narrative_text:
+        st.write(narrative_text)
+    else:
+        st.info(t(lang, "salary.narrative_hint"))
+        st.markdown(_fallback_salary_narrative(stored_prediction, lang=lang))
 
 
 def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
@@ -941,7 +1069,7 @@ def run_app() -> None:
         _render_intake(profile, api_key=api_key, model=model, lang=lang)
         return
     if current_step == "review":
-        _render_review(profile, lang=lang)
+        _render_review(profile, lang=lang, api_key=api_key, model=model, theme=theme)
         return
 
     _render_questions_step(
@@ -1612,7 +1740,9 @@ def _translate_fields_to_english(
         st.error(f"{t(lang, 'ui.translate_failed')}: {e}")
 
 
-def _render_review(profile: dict[str, Any], *, lang: str) -> None:
+def _render_review(
+    profile: dict[str, Any], *, lang: str, api_key: str, model: str, theme: str
+) -> None:
     st.markdown(f"## {t(lang, 'review.title')}")
     st.caption(t(lang, "review.edit_hint"))
     generated_md = render_job_ad_markdown(profile, lang)
@@ -1626,7 +1756,9 @@ def _render_review(profile: dict[str, Any], *, lang: str) -> None:
     )
 
     st.divider()
-    _render_salary_prediction(profile, lang=lang)
+    _render_salary_prediction(
+        profile, lang=lang, api_key=api_key, model=model, theme=theme
+    )
 
     col1, col2, col3 = st.columns(3)
     with col1:
