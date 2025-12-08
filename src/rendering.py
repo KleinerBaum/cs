@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from typing import Any, Iterable
+from typing import Any
 
 from docx import Document
 
