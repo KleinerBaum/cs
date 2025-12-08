@@ -103,6 +103,17 @@ PRIORITY_REQUIRED_PATHS = [
 
 MAX_SUGGESTION_PATHS = 12
 
+DEBUG_LLM_RESPONSES = os.getenv("DEBUG_LLM_RESPONSES") == "1"
+
+
+def _log_llm_raw_response(raw: str | None, *, context: str) -> None:
+    """Log raw LLM responses when debug logging is enabled."""
+
+    if not DEBUG_LLM_RESPONSES:
+        return
+    st.write(f"LLM raw response ({context}):")
+    st.write(raw)
+
 _EMPLOYMENT_TYPE_KEYWORDS: dict[str, str] = {
     "vollzeit": "full_time",
     "full time": "full_time",
@@ -894,6 +905,7 @@ def _generate_salary_narrative(
             " factors."
         )
         raw = client.text(prompt, instructions=instructions, max_output_tokens=320)
+        _log_llm_raw_response(raw, context="salary_narrative")
         data = safe_parse_json(raw)
         if not isinstance(data, dict):
             return None
@@ -1226,6 +1238,7 @@ def _render_intake(
             instructions=EXTRACTION_INSTRUCTIONS,
             max_output_tokens=1000,
         )
+        _log_llm_raw_response(raw, context="intake_extract")
         data = safe_parse_json(raw)
         updates = 0
         suggestion_updates = 0
@@ -1265,6 +1278,7 @@ def _render_intake(
                 instructions=FILL_MISSING_INSTRUCTIONS,
                 max_output_tokens=600,
             )
+            _log_llm_raw_response(fill_raw, context="intake_fill_missing")
             fill_data = safe_parse_json(fill_raw)
             if isinstance(fill_data, dict):
                 fill_fields = fill_data.get("fields") or []
@@ -1291,6 +1305,7 @@ def _render_intake(
                 instructions=SUGGEST_MISSING_INSTRUCTIONS,
                 max_output_tokens=800,
             )
+            _log_llm_raw_response(suggest_raw, context="intake_suggest_missing")
             suggest_data = safe_parse_json(suggest_raw)
             if isinstance(suggest_data, dict):
                 suggested_fields = suggest_data.get("suggestions") or []
@@ -1590,6 +1605,7 @@ def _generate_ai_followups(
             instructions=FOLLOWUP_INSTRUCTIONS,
             max_output_tokens=900,
         )
+        _log_llm_raw_response(raw, context="followup_questions")
         payload = safe_parse_json(raw)
         questions = payload.get("questions") or []
         cleaned: list[dict[str, Any]] = []
@@ -1783,6 +1799,7 @@ def _translate_fields_to_english(
             instructions=TRANSLATE_INSTRUCTIONS,
             max_output_tokens=800,
         )
+        _log_llm_raw_response(raw, context="translate_fields")
         data = safe_parse_json(raw)
         updates = 0
         if isinstance(data, dict):

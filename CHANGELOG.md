@@ -18,3 +18,4 @@
 - Hardened job-ad extraction so Pflichtfelder (job title, employment type, contract type, primary city, required languages) are prioritised, with a second LLM pass plus heuristics to backfill missing values.
 - Added automatic AI suggestions for still-empty required or optional fields, marking them with dedicated provenance so users can review and edit the proposed values quickly.
 - Switched the default OpenAI model to `gpt-4o-mini`, added `OPENAI_MODEL` overrides plus a bilingual sidebar selector, and covered model fallback/resolution with unit tests.
+- Added a `DEBUG_LLM_RESPONSES` toggle that surfaces raw Responses API payloads in the UI to diagnose malformed JSON before parsing.

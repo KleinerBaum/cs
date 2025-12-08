@@ -72,3 +72,4 @@ Tip: use `OPENAI_MODEL=gpt-3.5-turbo` to test a cheaper model end-to-end, or swi
 ## Developer notes
 
 - All structured field keys live in `src/keys.py` (`Keys` class). Reuse these constants for prompts, UI labels, and exports to avoid drift between modules.
+- Set `DEBUG_LLM_RESPONSES=1` to display raw Responses API outputs directly in the Streamlit UI for troubleshooting JSON parsing. Keep this flag disabled in production to avoid noisy logs.
