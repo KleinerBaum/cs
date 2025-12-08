@@ -1266,10 +1266,17 @@ def _render_intake(
             )
             return {}
 
+    data: dict[str, Any] = {}
+    extracted_fields: list[Any] = []
+    updates = 0
+    suggestion_updates = 0
+    client: LLMClient | None = None
+    llm_error: str | None = None
+    source_excerpt = source_doc.text[:MAX_SOURCE_TEXT_CHARS]
+
     try:
         # Use LLM to extract fields from the source text
         client = LLMClient(api_key=api_key, model=model)
-        source_excerpt = source_doc.text[:MAX_SOURCE_TEXT_CHARS]
         raw = client.text(
             extraction_user_prompt(source_excerpt),
             instructions=EXTRACTION_INSTRUCTIONS,
@@ -1277,9 +1284,6 @@ def _render_intake(
         )
         _log_llm_raw_response(raw, context="intake_extract")
         data = _parse_or_warn(raw, context="intake_extract")
-        updates = 0
-        suggestion_updates = 0
-        extracted_fields: list[Any] = []
         if isinstance(data, dict):
             extracted_fields = data.get("fields") or []
             updates += _apply_extracted_fields(
@@ -1288,90 +1292,97 @@ def _render_intake(
             lang_detected = data.get("detected_language")
             if lang_detected and isinstance(lang_detected, str):
                 update_source_language(profile, lang_detected)
-
-        missing_priority = [
-            path for path in PRIORITY_REQUIRED_PATHS if is_missing(profile, path)
-        ]
-        updates += _heuristic_fill_required_fields(
-            profile, missing_priority, source_doc
-        )
-        missing_priority = [
-            path for path in PRIORITY_REQUIRED_PATHS if is_missing(profile, path)
-        ]
-        if missing_priority:
-            context_payload: dict[str, Any] = {}
-            if isinstance(data, dict):
-                context_payload = {
-                    "detected_language": data.get("detected_language"),
-                    "fields": extracted_fields,
-                }
-            fill_raw = client.text(
-                fill_missing_fields_prompt(
-                    missing_paths=missing_priority,
-                    extracted_context=context_payload,
-                    source_text=source_excerpt,
-                    source_name=source_doc.name,
-                ),
-                instructions=FILL_MISSING_INSTRUCTIONS,
-                max_output_tokens=600,
-            )
-            _log_llm_raw_response(fill_raw, context="intake_fill_missing")
-            fill_data = _parse_or_warn(fill_raw, context="intake_fill_missing")
-            if isinstance(fill_data, dict):
-                fill_fields = fill_data.get("fields") or []
-                updates += _apply_extracted_fields(
-                    profile, fill_fields, evidence="llm_missing_recovery"
-                )
-        suggestion_paths = _collect_paths_for_ai_suggestions(profile)[
-            :MAX_SUGGESTION_PATHS
-        ]
-        if suggestion_paths:
-            suggestion_context: dict[str, Any] = {
-                "fields": extracted_fields,
-                "profile_values": flatten_values(profile),
-            }
-            if isinstance(data, dict):
-                suggestion_context["detected_language"] = data.get("detected_language")
-            suggest_raw = client.text(
-                suggest_missing_fields_prompt(
-                    missing_paths=suggestion_paths,
-                    extracted_context=suggestion_context,
-                    source_text=source_excerpt,
-                    source_name=source_doc.name,
-                ),
-                instructions=SUGGEST_MISSING_INSTRUCTIONS,
-                max_output_tokens=800,
-            )
-            _log_llm_raw_response(suggest_raw, context="intake_suggest_missing")
-            suggest_data = _parse_or_warn(
-                suggest_raw, context="intake_suggest_missing"
-            )
-            if isinstance(suggest_data, dict):
-                suggested_fields = suggest_data.get("suggestions") or []
-                suggestion_updates = _apply_extracted_fields(
-                    profile,
-                    suggested_fields,
-                    evidence="llm_ai_suggestion",
-                    provenance="ai_suggestion",
-                )
-                updates += suggestion_updates
-        st.session_state[SS_PROFILE] = profile
-        st.success(t(lang, "intake.extract_done"))
-        st.info(f"{t(lang, 'intake.updated_fields')}: {updates}")
-        if suggestion_updates:
-            st.info(t(lang, "ai.suggestions_done").format(suggestion_updates))
     except (BadRequestError, InvalidRequestError) as exc:
         logger.exception("LLM invalid request during intake extraction", exc_info=exc)
-        st.error(t(lang, "intake.invalid_request"))
-        return
+        llm_error = t(lang, "intake.invalid_request")
+        st.error(llm_error)
     except (APIConnectionError, APITimeoutError, TimeoutError) as exc:
         logger.exception("LLM network/timeout during intake extraction", exc_info=exc)
-        st.error(t(lang, "intake.retryable_error"))
-        return
+        llm_error = t(lang, "intake.retryable_error")
+        st.error(llm_error)
     except Exception as exc:
         logger.exception("Unexpected error during intake extraction", exc_info=exc)
-        st.error(f"{t(lang, 'intake.extract_failed')}: {exc}")
-        return
+        llm_error = f"{t(lang, 'intake.extract_failed')}: {exc}"
+        st.error(llm_error)
+
+    missing_priority = [
+        path for path in PRIORITY_REQUIRED_PATHS if is_missing(profile, path)
+    ]
+    updates += _heuristic_fill_required_fields(profile, missing_priority, source_doc)
+
+    missing_priority = [
+        path for path in PRIORITY_REQUIRED_PATHS if is_missing(profile, path)
+    ]
+    if missing_priority and client is not None and llm_error is None:
+        context_payload: dict[str, Any] = {}
+        if isinstance(data, dict):
+            context_payload = {
+                "detected_language": data.get("detected_language"),
+                "fields": extracted_fields,
+            }
+        fill_raw = client.text(
+            fill_missing_fields_prompt(
+                missing_paths=missing_priority,
+                extracted_context=context_payload,
+                source_text=source_excerpt,
+                source_name=source_doc.name,
+            ),
+            instructions=FILL_MISSING_INSTRUCTIONS,
+            max_output_tokens=600,
+        )
+        _log_llm_raw_response(fill_raw, context="intake_fill_missing")
+        fill_data = _parse_or_warn(fill_raw, context="intake_fill_missing")
+        if isinstance(fill_data, dict):
+            fill_fields = fill_data.get("fields") or []
+            updates += _apply_extracted_fields(
+                profile, fill_fields, evidence="llm_missing_recovery"
+            )
+
+    suggestion_paths = _collect_paths_for_ai_suggestions(profile)[
+        :MAX_SUGGESTION_PATHS
+    ]
+    if suggestion_paths and client is not None and llm_error is None:
+        suggestion_context: dict[str, Any] = {
+            "fields": extracted_fields,
+            "profile_values": flatten_values(profile),
+        }
+        if isinstance(data, dict):
+            suggestion_context["detected_language"] = data.get("detected_language")
+        suggest_raw = client.text(
+            suggest_missing_fields_prompt(
+                missing_paths=suggestion_paths,
+                extracted_context=suggestion_context,
+                source_text=source_excerpt,
+                source_name=source_doc.name,
+            ),
+            instructions=SUGGEST_MISSING_INSTRUCTIONS,
+            max_output_tokens=800,
+        )
+        _log_llm_raw_response(suggest_raw, context="intake_suggest_missing")
+        suggest_data = _parse_or_warn(
+            suggest_raw, context="intake_suggest_missing"
+        )
+        if isinstance(suggest_data, dict):
+            suggested_fields = suggest_data.get("suggestions") or []
+            suggestion_updates = _apply_extracted_fields(
+                profile,
+                suggested_fields,
+                evidence="llm_ai_suggestion",
+                provenance="ai_suggestion",
+            )
+            updates += suggestion_updates
+
+    st.session_state[SS_PROFILE] = profile
+    if llm_error:
+        st.warning(
+            "⚠️ Konnte die LLM-Extraktion nicht abschließen; nutze Heuristiken. "
+            "⚠️ Could not complete the LLM extraction; using heuristics."
+        )
+    else:
+        st.success(t(lang, "intake.extract_done"))
+    st.info(f"{t(lang, 'intake.updated_fields')}: {updates}")
+    if suggestion_updates:
+        st.info(t(lang, "ai.suggestions_done").format(suggestion_updates))
 
     # After extraction, move to first form step (Company)
     st.session_state[SS_STEP] = "company"
