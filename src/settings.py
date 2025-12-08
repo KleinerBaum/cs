@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import importlib.util
+import os
+from typing import Any
+
 APP_NAME = "CognitiveStaffing – Need Analysis Wizard"
 
 # ---- OpenAI / LLM
-DEFAULT_MODEL = "gpt-5-mini"  # https://platform.openai.com/docs/models/gpt-5-mini
+DEFAULT_MODEL = "gpt-4o-mini"  # Widely available, cost-efficient default
 DEFAULT_TEMPERATURE = 0.2
 DEFAULT_MAX_OUTPUT_TOKENS = 1400
+MODEL_ENV_KEY = "OPENAI_MODEL"
 
 # Keep prompts bounded to avoid accidental huge requests
 MAX_SOURCE_TEXT_CHARS = 70_000
@@ -22,3 +27,42 @@ USER_AGENT = "CognitiveStaffing/0.1 (+streamlit)"
 # ---- UX
 MAX_PRIMARY_QUESTIONS_PER_STEP = 10
 LOW_CONFIDENCE_THRESHOLD = 0.60
+
+
+def _get_streamlit_secret(key: str) -> str | None:
+    if importlib.util.find_spec("streamlit") is None:
+        return None
+
+    import streamlit as st  # type: ignore
+
+    raw_secrets: Any = getattr(st, "secrets", None)
+    if raw_secrets is None:
+        return None
+
+    if not raw_secrets:
+        return None
+
+    direct = raw_secrets.get(key)
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+
+    general = raw_secrets.get("general", {})
+    if isinstance(general, dict):
+        nested = general.get(key)
+        if isinstance(nested, str) and nested.strip():
+            return nested.strip()
+    return None
+
+
+def configured_model(default_model: str = DEFAULT_MODEL) -> str:
+    """Return the model configured via env/Streamlit secrets with a safe fallback."""
+
+    env_override = os.getenv(MODEL_ENV_KEY, "").strip()
+    if env_override:
+        return env_override
+
+    secret_override = _get_streamlit_secret(MODEL_ENV_KEY)
+    if secret_override:
+        return secret_override
+
+    return default_model

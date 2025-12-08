@@ -34,13 +34,12 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 
 ## AI-powered assistance
 
-- **Field extraction:** In the *Import* step, if an OpenAI API key is configured, the app will attempt to extract structured information from the provided job ad text using an LLM (via OpenAI model **gpt-5-mini**). Detected fields (e.g. company contact email or website) are prefilled with a provenance tag "Extracted". This speeds up the form-filling process.
+- **Field extraction:** In the *Import* step, if an OpenAI API key is configured, the app will attempt to extract structured information from the provided job ad text using an LLM (default model **gpt-4o-mini**, overrideable). Detected fields (e.g. company contact email or website) are prefilled with a provenance tag "Extracted". This speeds up the form-filling process.
 - **Mandatory-field recovery:** The extractor now explicitly prioritises all Pflichtfelder—especially job title, employment type, contract type, primary city, and required languages—and performs a targeted second LLM pass plus lightweight heuristics to backfill anything still missing.
 - **Auto-suggest for gaps:** After extraction, the wizard asks the LLM for plausible suggestions for any remaining required **or optional** fields. These values are inserted with the provenance "AI suggestion" so they are visually marked, fully editable, and easy to accept or overwrite.
 - **Follow-up questions:** At each step, you can click **"AI: Generate suggestions"** to have the LLM propose follow-up questions for any missing or uncertain fields. These AI-generated questions (in both DE and EN) will appear below the form, allowing you to fill in additional details. This feature is optional and only triggers if relevant fields are missing. You can also enable auto-generation of follow-ups via the sidebar ("Suggest AI follow-ups automatically").
 - **English translation:** As noted, the LLM can translate key fields to English for international job ads. The translated values are stored in parallel fields (e.g., `job_title_en`) and used when you switch to English output.
-- **Fixed model selection:** The app always uses OpenAI **gpt-5-mini** for extraction, follow-ups, and translations; the sidebar no longer exposes a model selector to avoid accidental misconfiguration.
-- **Model compatibility:** The Responses API for **gpt-5-mini** does not accept a `temperature` parameter. The app therefore relies on the model defaults and omits unsupported sampling parameters to avoid HTTP 400 errors during extraction, follow-up generation, and translation.
+- **Model flexibility with safe default:** The sidebar now offers an optional model selector (defaulting to **gpt-4o-mini**). You can also set `OPENAI_MODEL` (Streamlit secrets or environment) to pin a specific model like `gpt-3.5-turbo` for cost-sensitive runs. The app continues to omit unsupported sampling parameters for Responses API compatibility.
 
 ## Salary prediction (checkbox-driven)
 
@@ -53,16 +52,22 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 
 Before launching the app, set the OpenAI API key via Streamlit secrets or an environment variable. The UI does **not** expose a text field for the API key; if no key is configured, the app will stop with an error message.
 
+You can also choose the default model via Streamlit secrets or an environment variable; the sidebar allows toggling between common options at runtime:
+
 You can add the key to `.streamlit/secrets.toml` or as an environment variable:
 
 ```toml
 OPENAI_API_KEY = "sk-..."
+OPENAI_MODEL = "gpt-4o-mini"  # Optional: override the default model for all requests
 
 # or under a [general] section:
 [general]
 OPENAI_API_KEY = "sk-..."
+OPENAI_MODEL = "gpt-3.5-turbo"
 
 ```
+
+Tip: use `OPENAI_MODEL=gpt-3.5-turbo` to test a cheaper model end-to-end, or switch back to **gpt-4o-mini** in the sidebar for higher-quality responses.
 
 ## Developer notes
 
