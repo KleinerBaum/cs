@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Removed duplicate field-constant module and legacy wizard catalog in favor of the centralized `src/keys.py` definitions and the active question engine.
 - Added a themed salary visualization (min/avg/max) plus bilingual AI rationale beneath the checkbox selection, making the prediction easier to interpret alongside the applied factors.
 - Added a selectable salary prediction section that gathers marked profile fields, triggers calculation on demand, and explains the resulting range via applied heuristics.
 - Added flexible job-ad intake supporting URL fetches with HTML parsing, PDF/DOCX uploads, and pasted text inputs to prefill the wizard.

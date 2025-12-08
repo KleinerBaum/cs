@@ -56,8 +56,14 @@ Before launching the app, set the OpenAI API key via Streamlit secrets or an env
 You can add the key to `.streamlit/secrets.toml` or as an environment variable:
 
 ```toml
-OPENAI_API_KEY = "sk-..." 
+OPENAI_API_KEY = "sk-..."
 
 # or under a [general] section:
 [general]
 OPENAI_API_KEY = "sk-..."
+
+```
+
+## Developer notes
+
+- All structured field keys live in `src/keys.py` (`Keys` class). Reuse these constants for prompts, UI labels, and exports to avoid drift between modules.
