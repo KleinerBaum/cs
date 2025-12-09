@@ -869,7 +869,7 @@ def _render_salary_chart(
         .configure_axis(labelColor=text_color, titleColor=text_color)
         .configure_view(strokeWidth=0)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 
 def _fallback_salary_narrative(prediction: SalaryPrediction, *, lang: str) -> str:
@@ -1069,7 +1069,7 @@ def _render_sidebar(*, lang: str, profile: dict[str, Any]) -> str:
             """,
             unsafe_allow_html=True,
         )
-        if st.button(f"♻️ {t(lang, 'sidebar.reset')}", use_container_width=True):
+        if st.button(f"♻️ {t(lang, 'sidebar.reset')}", width="stretch"):
             _reset_session()
         st.markdown("</div>", unsafe_allow_html=True)
         _render_sidebar_overview(lang=lang, profile=profile)
