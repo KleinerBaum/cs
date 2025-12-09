@@ -17,7 +17,6 @@ from openai import (
     APIConnectionError,
     APITimeoutError,
     BadRequestError,
-    InvalidRequestError,
 )
 
 from .esco_client import ESCOError, occupation_related_skills, search_occupations
@@ -1295,7 +1294,7 @@ def _render_intake(
             lang_detected = data.get("detected_language")
             if lang_detected and isinstance(lang_detected, str):
                 update_source_language(profile, lang_detected)
-    except (BadRequestError, InvalidRequestError) as exc:
+    except BadRequestError as exc:
         logger.exception("LLM invalid request during intake extraction", exc_info=exc)
         llm_error = t(lang, "intake.invalid_request")
         st.error(llm_error)
@@ -1344,7 +1343,7 @@ def _render_intake(
                         profile, fill_fields, evidence="llm_missing_recovery"
                     )
                     return True
-            except (BadRequestError, InvalidRequestError) as exc:
+            except BadRequestError as exc:
                 logger.exception(
                     "LLM invalid request during %s", context_label, exc_info=exc
                 )
