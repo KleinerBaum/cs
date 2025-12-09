@@ -14,23 +14,28 @@ from state import (
     value_for_key,
 )
 
-_REQUIRED_PROFILE = ("company.name", "company.contact_email")
-_REQUIRED_ROLE = (
-    "position.job_title",
-    "position.seniority_level",
+_REQUIRED_PROFILE = (
+    "company.name",
+    "location.primary_city",
     "employment.employment_type",
     "employment.contract_type",
     "employment.start_date",
-    "location.primary_city",
-    "responsibilities.items",
+)
+_REQUIRED_ROLE = (
+    "position.job_title",
+    "position.seniority_level",
+    "team.department_name",
 )
 _REQUIRED_SKILLS = (
+    "responsibilities.items",
     "requirements.hard_skills_required",
-    "requirements.soft_skills_required",
-    "requirements.languages_required",
-    "requirements.tools_and_technologies",
 )
-_REQUIRED_COMPENSATION = ("benefits.items",)
+_REQUIRED_COMPENSATION = (
+    "compensation.salary_min",
+    "compensation.salary_max",
+    "compensation.currency",
+    "benefits.items",
+)
 
 
 def _non_empty(value: Any) -> bool:
@@ -84,7 +89,19 @@ def validate_compensation(
     comp: CompensationState, *, lang: str
 ) -> list[tuple[str, str]]:
     state = AppState(compensation=comp)
-    return _collect_missing(_REQUIRED_COMPENSATION, state, lang=lang)
+    errors = _collect_missing(_REQUIRED_COMPENSATION, state, lang=lang)
+    if (
+        comp.salary_min is not None
+        and comp.salary_max is not None
+        and comp.salary_min > comp.salary_max
+    ):
+        errors.append(
+            (
+                "compensation.salary_min",
+                t(lang, "validation.range"),
+            )
+        )
+    return errors
 
 
 def validate_app_step(app_state: AppState, step: str, *, lang: str) -> dict[str, str]:

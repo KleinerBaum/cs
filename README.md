@@ -2,6 +2,19 @@
 
 A modular Streamlit app for line managers to transform an existing job ad (URL, PDF, DOCX, or pasted text) into a structured **NeedAnalysisProfile** and an exportable job ad draft.
 
+## Multi-page wizard (Profile → Summary)
+
+The wizard now uses native Streamlit multi-page navigation (`app.py` + `pages/*`) with distinct steps and validation per section:
+
+- **01 Profile:** company name, city, employment/contract type, start date, remote policy.
+- **02 Role:** title, seniority, department, direct reports, work schedule, and a one-click summary generator.
+- **03 Skills:** tasks, core skills, and nice-to-haves split into tabs with bilingual suggestion buttons.
+- **04 Compensation:** currency and salary range validation (min ≤ max), benefits, variable %, relocation, visa.
+- **05 Forecast:** configurable conversion rates and time-to-fill Monte-Carlo simulation with KPI tiles and histogram.
+- **99 Summary:** section status (✅/⚠️) plus JSON and Markdown exports of the consolidated NeedAnalysisProfile.
+
+Navigation buttons prevent advancing until the current section is valid. All inputs persist in `st.session_state`, so you can revisit any page without losing data.
+
 ## Ingestion fidelity (DE/EN)
 
 - PDF uploads use PyMuPDF with ligature and whitespace preservation so that bullet lists, headings, and special characters remain intact in the extracted raw text.

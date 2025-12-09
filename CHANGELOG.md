@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a Streamlit multi-page wizard (Profile → Summary) with validation-gated navigation, deterministic LLM helper buttons, forecast simulation, and JSON/Markdown exports.
 - Introduced a centralized `AppState` Pydantic model plus section-specific validators, keeping Streamlit session data, LLM helpers, and per-step error reporting aligned on the canonical field keys.
 - Added per-step validation with inline, bilingual error messages that block Next navigation until required fields are completed.
 - Split AI helper buttons into single-purpose actions (role summary, tasks, core/nice-to-have skills) and routed LLM calls through a parameter allow-list wrapper to strip unsupported options before sending requests.
