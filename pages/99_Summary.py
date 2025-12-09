@@ -49,7 +49,7 @@ def _markdown_export(state: AppState) -> str:
         f"- Relocation: {comp.relocation}",
         f"- Visa: {comp.visa}",
         "",
-        f"Exported: {datetime.utcnow().isoformat()} UTC",
+        f"Exported: {datetime.now(datetime.UTC).isoformat()} UTC",
     ]
     return "\n".join(lines)
 
