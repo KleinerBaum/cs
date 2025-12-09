@@ -101,6 +101,24 @@ This returns the parsed seniority, company, and must-have skills for the supplie
   `PipelinePayload` model that normalizes legacy UI keys (e.g., `extracted_company`, `parsed_title`) into
   the canonical schema fields (`company_name`, `job_title`, `seniority`, etc.).
 
+### CLI runner (deterministic pipeline)
+
+For local debugging without Streamlit, run the deterministic pipeline directly via the CLI helper:
+
+```bash
+python cli.py --content "Senior Python Engineer at LEGO AG"
+```
+
+You can optionally pass a validation payload JSON file for required fields:
+
+```bash
+python cli.py --content "Senior Python Engineer at LEGO AG" \
+  --payload scripts/sample_payload.json
+```
+
+The script prints the pipeline result as pretty-printed JSON so you can inspect extraction, validation, enrichment, or
+errors at a glance.
+
 ## Enrichment helpers (DE/EN)
 
 Use the pure enrichment helpers in `core.enricher` to derive a small ESCO skill set (first ten skills), build a boolean search string, and suggest a salary band for Mid/Senior roles (Ermittlung der ersten zehn ESCO-Skills, Aufbau eines Boolean-Strings und Gehaltsband für Mid/Senior).
