@@ -91,8 +91,9 @@ EOF
 ## Pipeline orchestrator
 
 Use `pipeline.py` to chain extraction, validation, and enrichment in one deterministic call. Provide a `RawInput` plus the
-required-field payload; enrichment runs only when no required fields are missing. Run `python pipeline.py` for a quick manual
-smoke test of the orchestration.
+required-field payload; enrichment runs only when no required fields are missing. The pipeline now logs debug output for each
+stage and returns an `error` key with the exception message if any step fails, ensuring the caller can surface a clear
+problem description. Run `python pipeline.py` for a quick manual smoke test of the orchestration.
 
 This returns the parsed seniority, company, and must-have skills for the supplied snippet.
 

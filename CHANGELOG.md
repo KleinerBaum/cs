@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Added debug logging across the extraction/validation/pipeline stages and ensured pipeline failures return an `error` key with
+  the underlying exception message for easier surfacing in clients.
 - Normalised the Streamlit pipeline runner to use a typed payload model that maps legacy UI keys to canonical schema fields
   (`company_name`, `job_title`, `seniority`, etc.) before validation/enrichment.
 - Added a deterministic pipeline orchestrator that chains extraction, validation, and optional enrichment for vacancy data.
