@@ -210,6 +210,21 @@ def set_app_state(state: AppState) -> None:
     st.session_state[STATE_SESSION_KEY] = state
 
 
+def app_state_from_profile(profile: dict[str, Any] | BaseModel) -> AppState:
+    """Construct an AppState from a NeedAnalysisProfile mapping."""
+
+    profile_dict = (
+        profile.model_dump() if isinstance(profile, BaseModel) else profile
+    )
+    state = AppState()
+    for key, path in _KEY_TO_STATE_PATH.items():
+        value = _get_profile_value(profile_dict, key.split("."))
+        if value is None:
+            continue
+        _set_nested(state, path.split("."), value)
+    return state
+
+
 def apply_app_state_to_profile(state: AppState) -> dict[str, Any]:
     """Export AppState values into a NeedAnalysisProfile mapping."""
 
@@ -244,6 +259,22 @@ def _assign_nested(target: dict[str, Any], path: list[str], value: Any) -> None:
     current[path[-1]] = value
 
 
+def _set_nested(state: AppState, path: list[str], value: Any) -> None:
+    current: Any = state
+    for part in path[:-1]:
+        current = getattr(current, part)
+    setattr(current, path[-1], value)
+
+
+def _get_profile_value(profile: dict[str, Any], path: list[str]) -> Any:
+    current: Any = profile
+    for part in path:
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
+
+
 def _get_nested(state: AppState, path: list[str]) -> Any:
     current: Any = state
     for part in path:
@@ -274,6 +305,7 @@ __all__ = [
     "ForecastState",
     "get_app_state",
     "set_app_state",
+    "app_state_from_profile",
     "apply_app_state_to_profile",
     "value_for_key",
 ]

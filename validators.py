@@ -71,24 +71,24 @@ def _collect_missing(
 
 
 def validate_profile(profile: ProfileState, *, lang: str) -> list[tuple[str, str]]:
-    state = AppState(profile=profile)
+    state = app_state_from_profile(profile)
     return _collect_missing(_REQUIRED_PROFILE, state, lang=lang)
 
 
 def validate_role(role: RoleState, *, lang: str) -> list[tuple[str, str]]:
-    state = AppState(role=role)
+    state = app_state_from_profile(role)
     return _collect_missing(_REQUIRED_ROLE, state, lang=lang)
 
 
 def validate_skills(skills: SkillsState, *, lang: str) -> list[tuple[str, str]]:
-    state = AppState(skills=skills)
+    state = app_state_from_profile(skills)
     return _collect_missing(_REQUIRED_SKILLS, state, lang=lang)
 
 
 def validate_compensation(
     comp: CompensationState, *, lang: str
 ) -> list[tuple[str, str]]:
-    state = AppState(compensation=comp)
+    state = app_state_from_profile(comp)
     errors = _collect_missing(_REQUIRED_COMPENSATION, state, lang=lang)
     if (
         comp.salary_min is not None
