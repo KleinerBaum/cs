@@ -13,6 +13,7 @@ def test_default_values_are_empty_lists():
     enrichment = Enrichment()
 
     assert raw.model_dump()["text"] == "example"
+    assert raw.model_dump()["source_type"] == "text"
     assert core.model_dump() == {
         "title": None,
         "company": None,
