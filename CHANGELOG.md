@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a deterministic pipeline orchestrator that chains extraction, validation, and optional enrichment for vacancy data.
 - Added deterministic enrichment helpers for ESCO skills, boolean search strings, and salary bands based on seniority.
 - Added a required-field validator that reports missing keys plus a rounded confidence score for vacancy intake quality gates.
 - Added a deterministic text extractor adapter with schema aliases for ``content``/``source_type`` inputs and minimal skill/company parsing.
