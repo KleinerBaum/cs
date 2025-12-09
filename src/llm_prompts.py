@@ -72,12 +72,15 @@ class LLMClient:
         *,
         instructions: str | None = None,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+        response_format: dict[str, Any] | None = None,
     ) -> str:
+        structured_format = response_format or {"type": "json_object"}
         resp = self.client.responses.create(
             model=self.model,
             input=input_text,
             instructions=instructions,
             max_output_tokens=max_output_tokens,
+            response_format=structured_format,
         )
         return response_to_text(resp)
 
@@ -90,7 +93,9 @@ def response_to_text(resp: Any) -> str:
     """Best-effort extraction of assistant text from a Responses API response."""
     # Most common path (as in the OpenAI cookbook)
     try:
-        return resp.output[0].content[0].text  # type: ignore[attr-defined]
+        first_text = resp.output[0].content[0].text  # type: ignore[attr-defined]
+        if first_text:
+            return first_text
     except Exception:
         pass
 
@@ -132,6 +137,14 @@ def response_to_text(resp: Any) -> str:
                 )
                 if txt:
                     texts.append(txt)
+            if c_type == "output_json":
+                json_payload = (
+                    getattr(c, "json", None)
+                    if not isinstance(c, dict)
+                    else c.get("json")
+                )
+                if json_payload is not None:
+                    texts.append(json.dumps(json_payload, ensure_ascii=False))
     return "".join(texts).strip()
 
 

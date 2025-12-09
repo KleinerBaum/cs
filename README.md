@@ -41,7 +41,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - **English translation:** As noted, the LLM can translate key fields to English for international job ads. The translated values are stored in parallel fields (e.g., `job_title_en`) and used when you switch to English output.
 - **Model flexibility with safe default:** The sidebar now offers an optional model selector (defaulting to **gpt-4o-mini**). You can also set `OPENAI_MODEL` (Streamlit secrets or environment) to pin a specific model like `gpt-3.5-turbo` for cost-sensitive runs. The app continues to omit unsupported sampling parameters for Responses API compatibility.
 - **Resilient error handling:** Intake LLM calls surface targeted configuration hints for invalid models/parameters and separate retry/backoff guidance for network or timeout issues (bilingual messaging).
-- **LLM JSON fallback:** When the extractor returns unparseable JSON or the first call fails, the app runs a low-cost recovery request via `fill_missing_fields_prompt` for prioritized missing paths (source text only) with short backoff. If this also fails, the UI surfaces a bilingual warning and continues with heuristic fills instead of aborting.
+- **Structured JSON + fallback:** LLM calls now request structured Responses API outputs (`response_format`) so extraction and suggestion payloads stay valid JSON without manual clean-up. If a response still cannot be parsed or the first call fails, the app runs a low-cost recovery request via `fill_missing_fields_prompt` for prioritized missing paths (source text only) with short backoff. If this also fails, the UI surfaces a bilingual warning and continues with heuristic fills instead of aborting.
 
 ## Salary prediction (checkbox-driven)
 
