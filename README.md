@@ -29,7 +29,9 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - **English field translation:** In the "Skills" step, you can automatically translate key fields (job title, required hard/soft skills, tools) to English by clicking the **"AI: Generate English versions"** button. This uses the OpenAI API to fill optional English fields (marked as "*English version, optional*"). If you switch the UI language to English, these translated values will be used in the job ad output.
 - **Dynamic forms:** Each step groups a set of questions (basic and optional advanced fields). Advanced fields are hidden under *"More details (optional)"* to keep the UI uncluttered. Conditional fields (e.g., travel percentage if travel is required) only appear when relevant.
 - **Calm validation:** Required-field warnings stay hidden on initial load and only appear after you attempt an action where the missing inputs matter (e.g., clicking **Next** with empty required fields). Errors now render inline beneath the affected inputs so you can fix them without hunting for a global banner.
-- **Session state:** Form data persists in `st.session_state` as you navigate. You can reset the session via the sidebar.
+- **Session state:** Form data persists in `st.session_state` as you navigate. You can reset the session via the sidebar. The
+  centralized `AppState` can be reconstructed from a NeedAnalysisProfile mapping and exported back for deterministic pipeline
+  runs, keeping UI inputs and payloads aligned.
 - **Sidebar input overview:** Below the **"Reset session"** button, each step now has a collapsible summary (company, team, framework, etc.) showing all fields with their current values and a quick **"Go to step"** jump link.
 
 ## Branding & layout
