@@ -83,10 +83,16 @@ from .utils import (
     list_to_multiline,
     multiline_to_list,
 )
-from llm_tools import generate_role_summary, generate_tasks, suggest_skills
-from validators import validate_section
+from llm_tools import (
+    generate_role_summary_from_state,
+    generate_tasks_from_state,
+    suggest_skills_from_state,
+)
+from state import AppState, app_state_from_profile, get_app_state
+from validators import validate_app_step
 
 # Session state keys
+SS_APP_STATE = "app_state"
 SS_PROFILE = "profile"
 SS_STEP = "step"
 SS_SOURCE_DOC = "source_doc"
@@ -215,7 +221,11 @@ def _init_state() -> None:
     if SS_STEP not in st.session_state:
         st.session_state[SS_STEP] = "intake"
     if SS_PROFILE not in st.session_state:
-        st.session_state[SS_PROFILE] = new_profile(ui_language=LANG_DE)
+        _set_profile(new_profile(ui_language=LANG_DE))
+    if SS_APP_STATE not in st.session_state:
+        st.session_state[SS_APP_STATE] = app_state_from_profile(
+            st.session_state[SS_PROFILE]
+        )
     if SS_SOURCE_DOC not in st.session_state:
         st.session_state[SS_SOURCE_DOC] = None
     if SS_AI_FOLLOWUPS not in st.session_state:
@@ -251,6 +261,17 @@ def _init_state() -> None:
         st.session_state[SS_SALARY_NARRATIVE] = None
 
 
+def _sync_app_state_from_profile(profile: dict[str, Any]) -> AppState:
+    state = app_state_from_profile(profile)
+    st.session_state[SS_APP_STATE] = state
+    return state
+
+
+def _set_profile(profile: dict[str, Any]) -> None:
+    st.session_state[SS_PROFILE] = profile
+    _sync_app_state_from_profile(profile)
+
+
 def _reset_session() -> None:
     # Clear all relevant session keys and restart
     for k in [
@@ -269,6 +290,7 @@ def _reset_session() -> None:
         SS_SALARY_FACTORS,
         SS_SALARY_RESULT,
         SS_SALARY_NARRATIVE,
+        SS_APP_STATE,
     ]:
         st.session_state.pop(k, None)
     st.rerun()
@@ -506,9 +528,9 @@ def _go_prev() -> None:
 
 
 def _validate_and_go_next(lang: str) -> None:
-    profile: dict[str, Any] = st.session_state[SS_PROFILE]
     current_step = st.session_state[SS_STEP]
-    errors = validate_section(profile, current_step, lang=lang)
+    app_state = get_app_state()
+    errors = validate_app_step(app_state, current_step, lang=lang)
     st.session_state.setdefault(SS_STEP_ERRORS, {})[current_step] = errors
     if errors:
         st.session_state[SS_SHOW_REQUIRED_WARNING] = True
@@ -1149,13 +1171,9 @@ def run_app() -> None:
     # Prev/Next navigation buttons
     nav_cols = st.columns([1, 6, 1])
     with nav_cols[0]:
-        prev_clicked = st.button(
-            t(lang, "nav.prev"), disabled=current_step == "intake"
-        )
+        prev_clicked = st.button(t(lang, "nav.prev"), disabled=current_step == "intake")
     with nav_cols[2]:
-        next_clicked = st.button(
-            t(lang, "nav.next"), disabled=current_step == "review"
-        )
+        next_clicked = st.button(t(lang, "nav.next"), disabled=current_step == "review")
 
     if prev_clicked:
         _go_prev()
@@ -1268,7 +1286,7 @@ def _render_intake(
     if not api_key:
         # If no API key, skip LLM extraction and go straight to manual form
         st.warning(t(lang, "intake.no_openai_key"))
-        st.session_state[SS_PROFILE] = profile
+        _set_profile(profile)
         st.session_state[SS_STEP] = "company"
         st.rerun()
         return
@@ -1475,7 +1493,7 @@ def _render_intake(
             "⚠️ Automatic extraction failed; using heuristic values only."
         )
 
-    st.session_state[SS_PROFILE] = profile
+    _set_profile(profile)
     if llm_error:
         st.warning(
             "⚠️ Konnte die LLM-Extraktion nicht abschließen; nutze Heuristiken. "
@@ -1502,6 +1520,7 @@ def _render_questions_step(
 ) -> None:
     # Render all questions (primary and advanced) for a given wizard step
     errors_for_step = st.session_state.get(SS_STEP_ERRORS, {}).get(step) or {}
+    app_state = _sync_app_state_from_profile(profile)
 
     primary, more = select_questions_for_step(profile, step)
     _render_question_list(
@@ -1549,14 +1568,9 @@ def _render_questions_step(
             type="primary",
         ):
             try:
-                summary = generate_role_summary(
-                    get_value(profile, Keys.POSITION_TITLE) or "",
-                    {
-                        "company_name": get_value(profile, Keys.COMPANY_NAME),
-                        "team": get_value(profile, Keys.TEAM_NAME),
-                    },
-                    client=llm_client,
-                    model=model,
+                app_state = _sync_app_state_from_profile(profile)
+                summary = generate_role_summary_from_state(
+                    app_state, client=llm_client, model=model
                 )
                 if summary:
                     set_field(
@@ -1567,7 +1581,7 @@ def _render_questions_step(
                         confidence=0.62,
                         evidence="llm_role_summary",
                     )
-                    st.session_state[SS_PROFILE] = profile
+                    _set_profile(profile)
                     st.success(t(lang, "ui.role_summary_updated"))
             except BadRequestError as exc:
                 st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
@@ -1582,14 +1596,9 @@ def _render_questions_step(
             type="primary",
         ):
             try:
-                tasks = generate_tasks(
-                    get_value(profile, Keys.POSITION_TITLE) or "",
-                    {
-                        "position_summary": get_value(profile, Keys.POSITION_SUMMARY),
-                        "team": get_value(profile, Keys.TEAM_NAME),
-                    },
-                    client=llm_client,
-                    model=model,
+                app_state = _sync_app_state_from_profile(profile)
+                tasks = generate_tasks_from_state(
+                    app_state, client=llm_client, model=model
                 )
                 if tasks:
                     set_field(
@@ -1600,7 +1609,7 @@ def _render_questions_step(
                         confidence=0.58,
                         evidence="llm_tasks",
                     )
-                    st.session_state[SS_PROFILE] = profile
+                    _set_profile(profile)
                     st.success(t(lang, "ui.tasks_updated"))
             except BadRequestError as exc:
                 st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
@@ -1620,11 +1629,9 @@ def _render_questions_step(
             )
         if core_btn and llm_client:
             try:
-                skills = suggest_skills(
-                    get_value(profile, Keys.POSITION_TITLE) or "",
-                    get_value(profile, Keys.RESPONSIBILITIES) or [],
-                    client=llm_client,
-                    model=model,
+                app_state = _sync_app_state_from_profile(profile)
+                skills = suggest_skills_from_state(
+                    app_state, client=llm_client, model=model
                 )
                 if skills.get("must_have"):
                     set_field(
@@ -1635,7 +1642,7 @@ def _render_questions_step(
                         confidence=0.58,
                         evidence="llm_core_skills",
                     )
-                    st.session_state[SS_PROFILE] = profile
+                    _set_profile(profile)
                     st.success(t(lang, "ui.core_skills_updated"))
             except BadRequestError as exc:
                 st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
@@ -1643,11 +1650,9 @@ def _render_questions_step(
                 st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
         if nice_btn and llm_client:
             try:
-                skills = suggest_skills(
-                    get_value(profile, Keys.POSITION_TITLE) or "",
-                    get_value(profile, Keys.RESPONSIBILITIES) or [],
-                    client=llm_client,
-                    model=model,
+                app_state = _sync_app_state_from_profile(profile)
+                skills = suggest_skills_from_state(
+                    app_state, client=llm_client, model=model
                 )
                 if skills.get("nice_to_have"):
                     set_field(
@@ -1658,7 +1663,7 @@ def _render_questions_step(
                         confidence=0.52,
                         evidence="llm_nice_skills",
                     )
-                    st.session_state[SS_PROFILE] = profile
+                    _set_profile(profile)
                     st.success(t(lang, "ui.nice_skills_updated"))
             except BadRequestError as exc:
                 st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
@@ -1819,7 +1824,7 @@ def _apply_pending_esco_skills(profile: dict[str, Any], *, lang: str) -> None:
         confidence=0.7,
         evidence="esco_skill_apply",
     )
-    st.session_state[SS_PROFILE] = profile
+    _set_profile(profile)
     st.success(t(lang, "esco.apply_success"))
 
 
@@ -1864,7 +1869,7 @@ def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
     set_field(
         profile, path, value, provenance="user", confidence=1.0, evidence="user_input"
     )
-    st.session_state[SS_PROFILE] = profile
+    _set_profile(profile)
     step = st.session_state.get(SS_STEP)
     if step:
         existing_errors = st.session_state.get(SS_STEP_ERRORS, {})
@@ -2122,7 +2127,7 @@ def _translate_fields_to_english(
                     evidence="translation",
                 )
                 updates += 1
-        st.session_state[SS_PROFILE] = profile
+        _set_profile(profile)
         st.success(f"{t(lang, 'ui.translate_done')}: {updates}")
     except Exception as e:
         st.error(f"{t(lang, 'ui.translate_failed')}: {e}")

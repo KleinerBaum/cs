@@ -7,13 +7,28 @@ from typing import Any, Iterable
 from openai import APIConnectionError, APITimeoutError, BadRequestError, OpenAI
 
 from src.llm_prompts import response_to_text, safe_parse_json
+from state import AppState
 
 logger = logging.getLogger(__name__)
 
 # Parameter allow-list per model to avoid sending unsupported options
 _ALLOWED_PARAMS: dict[str, set[str]] = {
-    "gpt-4o-mini": {"input", "instructions", "max_output_tokens", "metadata", "response_format", "text"},
-    "o3-mini": {"input", "instructions", "max_output_tokens", "metadata", "response_format", "text"},
+    "gpt-4o-mini": {
+        "input",
+        "instructions",
+        "max_output_tokens",
+        "metadata",
+        "response_format",
+        "text",
+    },
+    "o3-mini": {
+        "input",
+        "instructions",
+        "max_output_tokens",
+        "metadata",
+        "response_format",
+        "text",
+    },
 }
 _DEFAULT_ALLOWED = {
     "input",
@@ -113,7 +128,9 @@ def generate_tasks(
             return [str(t).strip() for t in tasks if str(t).strip()]
     except ValueError as exc:
         logger.warning("Could not parse tasks JSON: %s", exc)
-    return [line.strip().lstrip("-•").strip() for line in raw.splitlines() if line.strip()]
+    return [
+        line.strip().lstrip("-•").strip() for line in raw.splitlines() if line.strip()
+    ]
 
 
 def suggest_skills(
@@ -131,9 +148,7 @@ def suggest_skills(
         client,
         model=model,
         input=prompt,
-        instructions=(
-            "Return JSON with 'must_have' and 'nice_to_have' list keys."
-        ),
+        instructions=("Return JSON with 'must_have' and 'nice_to_have' list keys."),
         response_format={"type": "json_object"},
         max_output_tokens=520,
     )
@@ -143,9 +158,58 @@ def suggest_skills(
             must_have = parsed.get("must_have")
             nice_to_have = parsed.get("nice_to_have")
             return {
-                "must_have": [str(x).strip() for x in must_have or [] if str(x).strip()],
-                "nice_to_have": [str(x).strip() for x in nice_to_have or [] if str(x).strip()],
+                "must_have": [
+                    str(x).strip() for x in must_have or [] if str(x).strip()
+                ],
+                "nice_to_have": [
+                    str(x).strip() for x in nice_to_have or [] if str(x).strip()
+                ],
             }
     except ValueError as exc:
         logger.warning("Could not parse skills JSON: %s", exc)
     return {"must_have": [], "nice_to_have": []}
+
+
+def generate_role_summary_from_state(
+    state: AppState, *, client: OpenAI, model: str
+) -> str:
+    """Generate a role summary using the unified AppState."""
+
+    return generate_role_summary(
+        state.role.job_title or "",
+        {
+            "company_name": state.profile.company_name,
+            "team": state.role.team_name,
+        },
+        client=client,
+        model=model,
+    )
+
+
+def generate_tasks_from_state(
+    state: AppState, *, client: OpenAI, model: str
+) -> list[str]:
+    """Generate tasks while reusing the canonical state mapping."""
+
+    return generate_tasks(
+        state.role.job_title or "",
+        {
+            "position_summary": state.role.role_summary,
+            "team": state.role.team_name,
+        },
+        client=client,
+        model=model,
+    )
+
+
+def suggest_skills_from_state(
+    state: AppState, *, client: OpenAI, model: str
+) -> dict[str, list[str]]:
+    """Suggest skills based on the stored AppState."""
+
+    return suggest_skills(
+        state.role.job_title or "",
+        state.role.tasks,
+        client=client,
+        model=model,
+    )
