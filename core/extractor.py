@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 import re
 from typing import Dict, List, Protocol
 
 from core.schemas import RawInput
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -57,10 +60,13 @@ EXTRACTORS: Dict[str, BaseExtractor] = {"text": TextExtractor()}
 
 def run_extraction(raw_input: RawInput) -> ExtractionResult:
     """Dispatch raw input to the registered extractor based on source type."""
+    logger.debug("Running extraction for source_type=%s", raw_input.source_type)
 
     try:
         extractor = EXTRACTORS[raw_input.source_type]
     except KeyError as exc:  # pragma: no cover - trivial guard
         raise ValueError(f"Unsupported source type: {raw_input.source_type}") from exc
 
-    return extractor.extract(raw_input)
+    result = extractor.extract(raw_input)
+    logger.debug("Extraction result: %s", result)
+    return result

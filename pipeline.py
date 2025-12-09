@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict
 
 from core.enricher import EnrichmentResult, run_enrichment
@@ -9,7 +10,9 @@ from core.extractor import ExtractionResult, run_extraction
 from core.schemas import Enrichment, RawInput, VacancyCore, VacancyValidated
 from core.validator import ValidationResult, validate_required_fields
 
-PipelineOutput = Dict[str, VacancyCore | VacancyValidated | Enrichment | None]
+logger = logging.getLogger(__name__)
+
+PipelineOutput = Dict[str, VacancyCore | VacancyValidated | Enrichment | str | None]
 
 
 def _build_validation_notes(validation: ValidationResult) -> list[str]:
@@ -36,28 +39,41 @@ def _to_enrichment_model(result: EnrichmentResult) -> Enrichment:
 
 def run_pipeline(raw_input: RawInput, payload: dict[str, Any] | None = None) -> PipelineOutput:
     """Run extraction, validation, and optional enrichment for a vacancy."""
+    logger.debug("Starting pipeline for source_type=%s", raw_input.source_type)
 
-    extraction: ExtractionResult = run_extraction(raw_input)
-    core = VacancyCore(
-        company=extraction.company,
-        requirements=list(extraction.must_have_skills),
-        tools=list(extraction.must_have_skills),
-    )
+    output: PipelineOutput = {"core": None, "validated": None, "enrichment": None}
 
-    validation_payload = payload or {}
-    validation: ValidationResult = validate_required_fields(validation_payload)
-    validated = VacancyValidated(
-        **core.model_dump(),
-        validation_notes=_build_validation_notes(validation),
-        validated=not validation["missing_required"],
-    )
+    try:
+        extraction: ExtractionResult = run_extraction(raw_input)
+        logger.debug("Extraction completed: %s", extraction)
 
-    enrichment_model: Enrichment | None = None
-    if not validation["missing_required"]:
-        enrichment_result = run_enrichment(extraction)
-        enrichment_model = _to_enrichment_model(enrichment_result)
+        core = VacancyCore(
+            company=extraction.company,
+            requirements=list(extraction.must_have_skills),
+            tools=list(extraction.must_have_skills),
+        )
 
-    return {"core": core, "validated": validated, "enrichment": enrichment_model}
+        validation_payload = payload or {}
+        validation: ValidationResult = validate_required_fields(validation_payload)
+        validated = VacancyValidated(
+            **core.model_dump(),
+            validation_notes=_build_validation_notes(validation),
+            validated=not validation["missing_required"],
+        )
+
+        enrichment_model: Enrichment | None = None
+        if not validation["missing_required"]:
+            enrichment_result = run_enrichment(extraction)
+            enrichment_model = _to_enrichment_model(enrichment_result)
+            logger.debug("Enrichment completed: %s", enrichment_result)
+
+        output.update({"core": core, "validated": validated, "enrichment": enrichment_model})
+        logger.debug("Pipeline finished successfully")
+        return output
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Pipeline failed: %s", exc)
+        output["error"] = str(exc)
+        return output
 
 
 if __name__ == "__main__":  # pragma: no cover - manual smoke test

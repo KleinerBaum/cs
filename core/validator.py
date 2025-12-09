@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, List, Mapping, TypedDict
+
+logger = logging.getLogger(__name__)
 
 REQUIRED: List[str] = [
     "company_name",
@@ -29,6 +32,8 @@ def validate_required_fields(payload: Mapping[str, Any]) -> ValidationResult:
     score bottoms out at ``0.0``.
     """
 
+    logger.debug("Validating required fields: %s", list(payload.keys()))
+
     missing_required = [field for field in REQUIRED if not payload.get(field)]
     total_required = len(REQUIRED)
 
@@ -36,5 +41,9 @@ def validate_required_fields(payload: Mapping[str, Any]) -> ValidationResult:
         confidence = 1.0
     else:
         confidence = max(0.0, round(1.0 - len(missing_required) / total_required, 2))
+
+    logger.debug(
+        "Validation result -> missing: %s, confidence: %s", missing_required, confidence
+    )
 
     return {"missing_required": missing_required, "confidence": confidence}

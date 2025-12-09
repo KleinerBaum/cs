@@ -27,3 +27,12 @@ def test_pipeline_runs_enrichment_when_all_required_present():
     assert result["enrichment"] is not None
     assert result["enrichment"].esco_skills == ["Python", "Pandas"]
     assert result["enrichment"].tags
+
+
+def test_pipeline_returns_error_on_invalid_raw_input():
+    raw = RawInput(content="some text", source_type="unknown")
+
+    result = run_pipeline(raw, payload={})
+
+    assert "error" in result
+    assert "Unsupported source type" in result["error"]
