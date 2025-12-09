@@ -72,6 +72,24 @@ OPENAI_MODEL = "gpt-3.5-turbo"
 
 Tip: use `OPENAI_MODEL=gpt-3.5-turbo` to test a cheaper model end-to-end, or switch back to **gpt-4o-mini** in the sidebar for higher-quality responses.
 
+## Extractor adapters
+
+Use the deterministic extractor layer to turn raw inputs into minimal fields without LLM calls. Example:
+
+```bash
+python - <<'EOF'
+from core.extractor import run_extraction
+from core.schemas import RawInput
+
+result = run_extraction(
+    RawInput(source_type="text", content="Senior Data Scientist at ACME AG using Python")
+)
+print(result)
+EOF
+```
+
+This returns the parsed seniority, company, and must-have skills for the supplied snippet.
+
 ## Developer notes
 
 - All structured field keys live in `src/keys.py` (`Keys` class). Reuse these constants for prompts, UI labels, and exports to avoid drift between modules.
