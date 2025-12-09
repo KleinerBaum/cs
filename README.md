@@ -94,3 +94,4 @@ This returns the parsed seniority, company, and must-have skills for the supplie
 
 - All structured field keys live in `src/keys.py` (`Keys` class). Reuse these constants for prompts, UI labels, and exports to avoid drift between modules.
 - Set `DEBUG_LLM_RESPONSES=1` to display raw Responses API outputs directly in the Streamlit UI for troubleshooting JSON parsing. Keep this flag disabled in production to avoid noisy logs.
+- A lightweight validator in `core.validator.validate_required_fields` reports missing required fields and a confidence score (1 - missing/total, rounded to two decimals) so ingestion steps can surface clear QA signals.
