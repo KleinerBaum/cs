@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Added per-step validation with inline, bilingual error messages that block Next navigation until required fields are completed.
+- Split AI helper buttons into single-purpose actions (role summary, tasks, core/nice-to-have skills) and routed LLM calls through a parameter allow-list wrapper to strip unsupported options before sending requests.
 - Added a CLI runner (`cli.py`) for the deterministic pipeline that prints pretty JSON for local debugging and optional payload
   validation.
 - Added debug logging across the extraction/validation/pipeline stages and ensured pipeline failures return an `error` key with

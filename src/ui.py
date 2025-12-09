@@ -17,6 +17,7 @@ from openai import (
     APIConnectionError,
     APITimeoutError,
     BadRequestError,
+    OpenAI,
 )
 
 from .esco_client import ESCOError, occupation_related_skills, search_occupations
@@ -82,6 +83,8 @@ from .utils import (
     list_to_multiline,
     multiline_to_list,
 )
+from llm_tools import generate_role_summary, generate_tasks, suggest_skills
+from validators import validate_section
 
 # Session state keys
 SS_PROFILE = "profile"
@@ -99,6 +102,7 @@ SS_SHOW_REQUIRED_WARNING = "show_required_warning"
 SS_SALARY_FACTORS = "salary_factors"
 SS_SALARY_RESULT = "salary_prediction_result"
 SS_SALARY_NARRATIVE = "salary_prediction_narrative"
+SS_STEP_ERRORS = "step_errors"
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
@@ -232,6 +236,8 @@ def _init_state() -> None:
         st.session_state[SS_PENDING_ESCO_HARD_REQ] = []
     if SS_SHOW_REQUIRED_WARNING not in st.session_state:
         st.session_state[SS_SHOW_REQUIRED_WARNING] = False
+    if SS_STEP_ERRORS not in st.session_state:
+        st.session_state[SS_STEP_ERRORS] = {}
     if SS_SALARY_FACTORS not in st.session_state:
         st.session_state[SS_SALARY_FACTORS] = {
             Keys.POSITION_SENIORITY,
@@ -259,6 +265,7 @@ def _reset_session() -> None:
         SS_JOB_AD_DRAFT,
         SS_THEME,
         SS_SHOW_REQUIRED_WARNING,
+        SS_STEP_ERRORS,
         SS_SALARY_FACTORS,
         SS_SALARY_RESULT,
         SS_SALARY_NARRATIVE,
@@ -481,6 +488,11 @@ def _step_index(step: str) -> int:
         return 0
 
 
+def _clear_step_errors(step: str) -> None:
+    st.session_state.setdefault(SS_STEP_ERRORS, {})
+    st.session_state[SS_STEP_ERRORS][step] = {}
+
+
 def _go_next() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx < len(STEPS) - 1:
@@ -491,6 +503,18 @@ def _go_prev() -> None:
     idx = _step_index(st.session_state[SS_STEP])
     if idx > 0:
         st.session_state[SS_STEP] = STEPS[idx - 1]
+
+
+def _validate_and_go_next(lang: str) -> None:
+    profile: dict[str, Any] = st.session_state[SS_PROFILE]
+    current_step = st.session_state[SS_STEP]
+    errors = validate_section(profile, current_step, lang=lang)
+    st.session_state.setdefault(SS_STEP_ERRORS, {})[current_step] = errors
+    if errors:
+        st.session_state[SS_SHOW_REQUIRED_WARNING] = True
+        return
+    _clear_step_errors(current_step)
+    _go_next()
 
 
 def _jump_to_step(step: str) -> None:
@@ -1106,10 +1130,7 @@ def run_app() -> None:
     missing = missing_required(profile)
     progress = 1.0 - (len(missing) / max(1, len(REQUIRED_FIELDS)))
     st.progress(progress)
-    missing_warning_enabled = bool(st.session_state.get(SS_SHOW_REQUIRED_WARNING))
-    if missing and missing_warning_enabled:
-        st.warning(f"{t(lang, 'progress.missing_required')}: {', '.join(missing)}")
-    elif not missing:
+    if not missing:
         st.success(t(lang, "progress.ready"))
 
     # Top navigation: horizontal radio for steps
@@ -1128,13 +1149,18 @@ def run_app() -> None:
     # Prev/Next navigation buttons
     nav_cols = st.columns([1, 6, 1])
     with nav_cols[0]:
-        st.button(
-            t(lang, "nav.prev"), on_click=_go_prev, disabled=current_step == "intake"
+        prev_clicked = st.button(
+            t(lang, "nav.prev"), disabled=current_step == "intake"
         )
     with nav_cols[2]:
-        st.button(
-            t(lang, "nav.next"), on_click=_go_next, disabled=current_step == "review"
+        next_clicked = st.button(
+            t(lang, "nav.next"), disabled=current_step == "review"
         )
+
+    if prev_clicked:
+        _go_prev()
+    if next_clicked:
+        _validate_and_go_next(lang)
 
     st.divider()
 
@@ -1475,16 +1501,21 @@ def _render_questions_step(
     lang: str,
 ) -> None:
     # Render all questions (primary and advanced) for a given wizard step
-    missing_step = missing_required_for_step(profile, step)
-    if missing_step:
-        st.info(f"{t(lang, 'step.missing_in_step')}: {', '.join(missing_step)}")
+    errors_for_step = st.session_state.get(SS_STEP_ERRORS, {}).get(step) or {}
 
     primary, more = select_questions_for_step(profile, step)
-    _render_question_list(profile, primary, step=step, lang=lang)
+    _render_question_list(
+        profile, primary, step=step, lang=lang, errors=errors_for_step
+    )
 
     with st.expander(t(lang, "ui.more_details"), expanded=False):
         _render_question_list(
-            profile, more, step=step, lang=lang, advanced_section=True
+            profile,
+            more,
+            step=step,
+            lang=lang,
+            advanced_section=True,
+            errors=errors_for_step,
         )
 
         # Optional: generate English variants for key fields (title + skills/tools)
@@ -1508,6 +1539,131 @@ def _render_questions_step(
         if step == "skills" and st.session_state.get(SS_USE_ESCO, True):
             st.divider()
             _render_esco_sidebar(profile, lang=lang)
+
+    llm_client = OpenAI(api_key=api_key) if api_key else None
+    if step == "framework":
+        st.divider()
+        if st.button(
+            t(lang, "ui.generate_role_summary"),
+            disabled=not bool(llm_client),
+            type="primary",
+        ):
+            try:
+                summary = generate_role_summary(
+                    get_value(profile, Keys.POSITION_TITLE) or "",
+                    {
+                        "company_name": get_value(profile, Keys.COMPANY_NAME),
+                        "team": get_value(profile, Keys.TEAM_NAME),
+                    },
+                    client=llm_client,
+                    model=model,
+                )
+                if summary:
+                    set_field(
+                        profile,
+                        Keys.POSITION_SUMMARY,
+                        summary,
+                        provenance="ai_suggestion",
+                        confidence=0.62,
+                        evidence="llm_role_summary",
+                    )
+                    st.session_state[SS_PROFILE] = profile
+                    st.success(t(lang, "ui.role_summary_updated"))
+            except BadRequestError as exc:
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
+            except Exception as exc:  # pragma: no cover - defensive
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
+
+    if step == "tasks":
+        st.divider()
+        if st.button(
+            t(lang, "ui.generate_tasks"),
+            disabled=not bool(llm_client),
+            type="primary",
+        ):
+            try:
+                tasks = generate_tasks(
+                    get_value(profile, Keys.POSITION_TITLE) or "",
+                    {
+                        "position_summary": get_value(profile, Keys.POSITION_SUMMARY),
+                        "team": get_value(profile, Keys.TEAM_NAME),
+                    },
+                    client=llm_client,
+                    model=model,
+                )
+                if tasks:
+                    set_field(
+                        profile,
+                        Keys.RESPONSIBILITIES,
+                        tasks,
+                        provenance="ai_suggestion",
+                        confidence=0.58,
+                        evidence="llm_tasks",
+                    )
+                    st.session_state[SS_PROFILE] = profile
+                    st.success(t(lang, "ui.tasks_updated"))
+            except BadRequestError as exc:
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
+            except Exception as exc:  # pragma: no cover - defensive
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
+
+    if step == "skills":
+        st.divider()
+        core_col, nice_col = st.columns(2)
+        with core_col:
+            core_btn = st.button(
+                t(lang, "ui.suggest_core_skills"), disabled=not bool(llm_client)
+            )
+        with nice_col:
+            nice_btn = st.button(
+                t(lang, "ui.suggest_nice_skills"), disabled=not bool(llm_client)
+            )
+        if core_btn and llm_client:
+            try:
+                skills = suggest_skills(
+                    get_value(profile, Keys.POSITION_TITLE) or "",
+                    get_value(profile, Keys.RESPONSIBILITIES) or [],
+                    client=llm_client,
+                    model=model,
+                )
+                if skills.get("must_have"):
+                    set_field(
+                        profile,
+                        Keys.HARD_REQ,
+                        skills["must_have"],
+                        provenance="ai_suggestion",
+                        confidence=0.58,
+                        evidence="llm_core_skills",
+                    )
+                    st.session_state[SS_PROFILE] = profile
+                    st.success(t(lang, "ui.core_skills_updated"))
+            except BadRequestError as exc:
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
+            except Exception as exc:  # pragma: no cover - defensive
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
+        if nice_btn and llm_client:
+            try:
+                skills = suggest_skills(
+                    get_value(profile, Keys.POSITION_TITLE) or "",
+                    get_value(profile, Keys.RESPONSIBILITIES) or [],
+                    client=llm_client,
+                    model=model,
+                )
+                if skills.get("nice_to_have"):
+                    set_field(
+                        profile,
+                        Keys.HARD_OPT,
+                        skills["nice_to_have"],
+                        provenance="ai_suggestion",
+                        confidence=0.52,
+                        evidence="llm_nice_skills",
+                    )
+                    st.session_state[SS_PROFILE] = profile
+                    st.success(t(lang, "ui.nice_skills_updated"))
+            except BadRequestError as exc:
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
+            except Exception as exc:  # pragma: no cover - defensive
+                st.error(f"{t(lang, 'errors.llm_call_failed')}: {exc}")
 
     st.divider()
     col_ai, col_hint = st.columns([1, 3])
@@ -1540,6 +1696,7 @@ def _render_question_list(
     step: str,
     lang: str,
     advanced_section: bool = False,
+    errors: dict[str, str] | None = None,
 ) -> None:
     if not questions:
         st.caption(t(lang, "ui.empty"))
@@ -1635,14 +1792,8 @@ def _render_question_list(
                 height=140,
                 on_change=partial(_on_widget_change, q.path, q.input_type, widget_key),
             )
-        else:
-            st.text_input(
-                label,
-                value=str(get_value(profile, q.path) or ""),
-                help=help_txt or None,
-                key=widget_key,
-                on_change=partial(_on_widget_change, q.path, "text", widget_key),
-            )
+        if errors and q.path in errors:
+            st.error(errors[q.path])
 
 
 def _queue_esco_skills(skills: list[str]) -> None:
@@ -1714,6 +1865,12 @@ def _on_widget_change(path: str, input_type: str, widget_key: str) -> None:
         profile, path, value, provenance="user", confidence=1.0, evidence="user_input"
     )
     st.session_state[SS_PROFILE] = profile
+    step = st.session_state.get(SS_STEP)
+    if step:
+        existing_errors = st.session_state.get(SS_STEP_ERRORS, {})
+        if path in existing_errors.get(step, {}):
+            existing_errors[step].pop(path, None)
+            st.session_state[SS_STEP_ERRORS] = existing_errors
 
 
 def _generate_ai_followups(
