@@ -88,6 +88,12 @@ print(result)
 EOF
 ```
 
+## Pipeline orchestrator
+
+Use `pipeline.py` to chain extraction, validation, and enrichment in one deterministic call. Provide a `RawInput` plus the
+required-field payload; enrichment runs only when no required fields are missing. Run `python pipeline.py` for a quick manual
+smoke test of the orchestration.
+
 This returns the parsed seniority, company, and must-have skills for the supplied snippet.
 
 ## Enrichment helpers (DE/EN)
