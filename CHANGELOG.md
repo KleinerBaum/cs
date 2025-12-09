@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Normalised the Streamlit pipeline runner to use a typed payload model that maps legacy UI keys to canonical schema fields
+  (`company_name`, `job_title`, `seniority`, etc.) before validation/enrichment.
 - Added a deterministic pipeline orchestrator that chains extraction, validation, and optional enrichment for vacancy data.
 - Added deterministic enrichment helpers for ESCO skills, boolean search strings, and salary bands based on seniority.
 - Added a required-field validator that reports missing keys plus a rounded confidence score for vacancy intake quality gates.

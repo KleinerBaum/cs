@@ -96,6 +96,10 @@ smoke test of the orchestration.
 
 This returns the parsed seniority, company, and must-have skills for the supplied snippet.
 
+- **Streamlit runner payloads:** The lightweight `/ui/steps/run.py` page now feeds the pipeline with a typed
+  `PipelinePayload` model that normalizes legacy UI keys (e.g., `extracted_company`, `parsed_title`) into
+  the canonical schema fields (`company_name`, `job_title`, `seniority`, etc.).
+
 ## Enrichment helpers (DE/EN)
 
 Use the pure enrichment helpers in `core.enricher` to derive a small ESCO skill set (first ten skills), build a boolean search string, and suggest a salary band for Mid/Senior roles (Ermittlung der ersten zehn ESCO-Skills, Aufbau eines Boolean-Strings und Gehaltsband für Mid/Senior).
