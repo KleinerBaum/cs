@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Added a CLI runner (`cli.py`) for the deterministic pipeline that prints pretty JSON for local debugging and optional payload
+  validation.
 - Added debug logging across the extraction/validation/pipeline stages and ensured pipeline failures return an `error` key with
   the underlying exception message for easier surfacing in clients.
 - Normalised the Streamlit pipeline runner to use a typed payload model that maps legacy UI keys to canonical schema fields
