@@ -80,7 +80,7 @@ class LLMClient:
             input=input_text,
             instructions=instructions,
             max_output_tokens=max_output_tokens,
-            response_format=structured_format,
+            text={"format": structured_format},
         )
         return response_to_text(resp)
 

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Switched Responses API structured outputs to the `text.format` parameter so `openai==2.9.0` calls avoid `TypeError` during intake extraction.
 - Enforced structured Responses API outputs for extraction/suggestion calls, preventing JSON fallbacks by default and improving parser reliability.
 - Added a low-cost recovery call for intake parse/LLM failures that retries `fill_missing_fields_prompt` on prioritized paths with short backoff before falling back to heuristics.
 - Hardened intake parsing so ValueError from malformed LLM JSON triggers a bilingual warning with a raw-response snippet while continuing with fallback data instead of aborting the flow.

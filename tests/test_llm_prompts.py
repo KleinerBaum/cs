@@ -67,6 +67,56 @@ def test_llm_client_requests_structured_output(monkeypatch: Any) -> None:
 
     assert parsed == {"ok": True}
     assert client.client.responses.last_kwargs is not None
-    assert client.client.responses.last_kwargs.get("response_format") == {
-        "type": "json_object"
+    assert client.client.responses.last_kwargs.get("text") == {
+        "format": {"type": "json_object"}
+    }
+
+
+def test_llm_client_intake_call_path_does_not_raise_type_error(monkeypatch: Any) -> None:
+    class _StrictResponses:
+        def __init__(self) -> None:
+            self.last_kwargs: dict[str, Any] | None = None
+
+        def create(
+            self,
+            *,
+            model: str,
+            input: str,
+            instructions: str | None = None,
+            max_output_tokens: int | None = None,
+            text: dict[str, Any] | None = None,
+        ) -> _DummyResponse:
+            self.last_kwargs = {
+                "model": model,
+                "input": input,
+                "instructions": instructions,
+                "max_output_tokens": max_output_tokens,
+                "text": text,
+            }
+            return _DummyResponse(
+                [
+                    _DummyMessage(
+                        [_DummyContent(type="output_json", json_payload={"ok": True})]
+                    )
+                ]
+            )
+
+    class _StrictOpenAI:
+        def __init__(self, *, api_key: str):
+            self.api_key = api_key
+            self.responses = _StrictResponses()
+
+    monkeypatch.setattr("src.llm_prompts.OpenAI", _StrictOpenAI)
+
+    client = LLMClient(api_key="sk-test", model="gpt-4o-mini")
+
+    text = client.text("intake prompt", instructions="return json", max_output_tokens=64)
+
+    assert json.loads(text) == {"ok": True}
+    assert client.client.responses.last_kwargs == {
+        "model": "gpt-4o-mini",
+        "input": "intake prompt",
+        "instructions": "return json",
+        "max_output_tokens": 64,
+        "text": {"format": {"type": "json_object"}},
     }
