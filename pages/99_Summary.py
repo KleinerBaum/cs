@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import streamlit as st
 
@@ -49,7 +49,7 @@ def _markdown_export(state: AppState) -> str:
         f"- Relocation: {comp.relocation}",
         f"- Visa: {comp.visa}",
         "",
-        f"Exported: {datetime.now(datetime.UTC).isoformat()} UTC",
+        f"Exported: {datetime.now(timezone.utc).isoformat()} UTC",
     ]
     return "\n".join(lines)
 
