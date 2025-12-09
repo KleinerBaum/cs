@@ -4,6 +4,7 @@ import urllib.parse
 from typing import Any
 
 import requests
+import streamlit as st
 
 from .settings import ESCO_BASE_URL, REQUEST_TIMEOUT_S, USER_AGENT
 
@@ -74,7 +75,11 @@ def _extract_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
             return v
     return []
 
+@st.cache_data(ttl=1200, show_spinner=False, key_func=lambda query, language="en", limit=10, offset=0: (
+    f"search_occupations::{query}|{language}|{limit}|{offset}"
+))
 def search_occupations(query: str, language: str = "en", limit: int = 10, offset: int = 0) -> list[dict[str, str]]:
+    """Search ESCO occupations (cached for efficiency)."""
     url = f"{ESCO_BASE_URL}/search"
     params = {
         "text": query,
@@ -95,7 +100,12 @@ def search_occupations(query: str, language: str = "en", limit: int = 10, offset
             out.append({"label": label, "uri": uri})
     return out
 
+
+@st.cache_data(ttl=1200, show_spinner=False, key_func=lambda query, language="en", limit=15, offset=0: (
+    f"search_skills::{query}|{language}|{limit}|{offset}"
+))
 def search_skills(query: str, language: str = "en", limit: int = 15, offset: int = 0) -> list[dict[str, str]]:
+    """Search ESCO skills (cached for efficiency)."""
     url = f"{ESCO_BASE_URL}/search"
     params = {
         "text": query,
@@ -116,7 +126,10 @@ def search_skills(query: str, language: str = "en", limit: int = 15, offset: int
             out.append({"label": label, "uri": uri})
     return out
 
+
+@st.cache_data(ttl=1200, show_spinner=False, key_func=lambda uri, language="en": f"get_occupation::{uri}|{language}")
 def get_occupation(uri: str, language: str = "en") -> dict[str, Any]:
+    """Fetch a single occupation (cached for efficiency)."""
     url = f"{ESCO_BASE_URL}/resource/occupation"
     return _get(url, params={"uri": uri, "language": language}, language=language)
 
@@ -126,7 +139,16 @@ def _fetch_hal_collection(href: str, language: str = "en", limit: int = 50) -> l
     data = _get(href, params={"limit": limit}, language=language)
     return _extract_results(data)
 
+
+@st.cache_data(
+    ttl=1200,
+    show_spinner=False,
+    key_func=lambda occupation_uri, language="en", max_items=25: (
+        f"occupation_related_skills::{occupation_uri}|{language}|{max_items}"
+    ),
+)
 def occupation_related_skills(occupation_uri: str, language: str = "en", max_items: int = 25) -> list[str]:
+    """List skills for an occupation (cached for efficiency)."""
     occ = get_occupation(occupation_uri, language=language)
     skills: list[str] = []
     # Check embedded results for skills
