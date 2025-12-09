@@ -7,6 +7,7 @@ import streamlit as st
 from core.schemas import RawInput
 from core.validator import validate_required_fields
 from pipeline import run_pipeline
+from ui.components.payload import PipelinePayload
 
 
 def _read_text_from_state() -> str:
@@ -19,11 +20,9 @@ def _read_text_from_state() -> str:
     return ""
 
 
-def _read_payload_from_state() -> dict[str, object]:
+def _read_payload_from_state() -> PipelinePayload:
     stored_payload = st.session_state.get("payload")
-    if isinstance(stored_payload, dict):
-        return stored_payload
-    return {}
+    return PipelinePayload.from_mapping(stored_payload)
 
 
 def main() -> None:
@@ -31,7 +30,8 @@ def main() -> None:
     st.title("Pipeline Runner / Pipeline-Ausführung")
 
     raw_text = _read_text_from_state()
-    payload = _read_payload_from_state()
+    payload_model = _read_payload_from_state()
+    payload = payload_model.to_canonical_dict()
 
     if not raw_text:
         st.info(
