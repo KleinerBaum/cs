@@ -90,6 +90,18 @@ EOF
 
 This returns the parsed seniority, company, and must-have skills for the supplied snippet.
 
+## Enrichment helpers (DE/EN)
+
+Use the pure enrichment helpers in `core.enricher` to derive a small ESCO skill set (first ten skills), build a boolean search string, and suggest a salary band for Mid/Senior roles (Ermittlung der ersten zehn ESCO-Skills, Aufbau eines Boolean-Strings und Gehaltsband für Mid/Senior).
+
+```python
+from core.enricher import run_enrichment
+from core.extractor import ExtractionResult
+
+result = run_enrichment(ExtractionResult(seniority="Senior", must_have_skills=["Python", "SQL"]))
+print(result)
+```
+
 ## Developer notes
 
 - All structured field keys live in `src/keys.py` (`Keys` class). Reuse these constants for prompts, UI labels, and exports to avoid drift between modules.
