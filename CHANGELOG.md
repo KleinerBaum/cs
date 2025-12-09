@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added deterministic enrichment helpers for ESCO skills, boolean search strings, and salary bands based on seniority.
 - Added a required-field validator that reports missing keys plus a rounded confidence score for vacancy intake quality gates.
 - Added a deterministic text extractor adapter with schema aliases for ``content``/``source_type`` inputs and minimal skill/company parsing.
 - Switched Responses API structured outputs to the `text.format` parameter so `openai==2.9.0` calls avoid `TypeError` during intake extraction.
