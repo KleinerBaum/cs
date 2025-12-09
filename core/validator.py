@@ -1,0 +1,40 @@
+"""Validation helpers for required vacancy fields."""
+
+from __future__ import annotations
+
+from typing import Any, List, Mapping, TypedDict
+
+REQUIRED: List[str] = [
+    "company_name",
+    "job_title",
+    "contract_type",
+    "employment_type",
+    "start_date",
+    "primary_city",
+]
+
+
+class ValidationResult(TypedDict):
+    """Structured validation output."""
+
+    missing_required: List[str]
+    confidence: float
+
+
+def validate_required_fields(payload: Mapping[str, Any]) -> ValidationResult:
+    """Return missing required fields and a confidence score.
+
+    Confidence is calculated as ``1.0 - missing/total`` for the required fields
+    and rounded to two decimal places. When every required field is missing, the
+    score bottoms out at ``0.0``.
+    """
+
+    missing_required = [field for field in REQUIRED if not payload.get(field)]
+    total_required = len(REQUIRED)
+
+    if total_required == 0:
+        confidence = 1.0
+    else:
+        confidence = max(0.0, round(1.0 - len(missing_required) / total_required, 2))
+
+    return {"missing_required": missing_required, "confidence": confidence}
