@@ -43,6 +43,7 @@ class Keys:
     EMPLOYMENT_CONTRACT = "employment.contract_type"  # required
     EMPLOYMENT_START = "employment.start_date"  # required
     EMPLOYMENT_VISA = "employment.visa_sponsorship"
+    EMPLOYMENT_SCHEDULE = "employment.work_schedule"
 
     # --- Compensation / Benefits
     SALARY_PROVIDED = "compensation.salary_provided"
@@ -51,6 +52,8 @@ class Keys:
     SALARY_CURRENCY = "compensation.currency"
     SALARY_PERIOD = "compensation.period"
     BENEFITS_ITEMS = "benefits.items"  # required
+    COMPENSATION_VARIABLE = "compensation.variable_pct"
+    COMPENSATION_RELOCATION = "compensation.relocation"
 
     # --- Responsibilities / Requirements
     RESPONSIBILITIES = "responsibilities.items"  # required
@@ -79,19 +82,18 @@ class Keys:
 # Required fields (Pflichtfelder)
 REQUIRED_FIELDS: set[str] = {
     Keys.COMPANY_NAME,
-    Keys.COMPANY_CONTACT_EMAIL,
     Keys.POSITION_TITLE,
     Keys.POSITION_SENIORITY,
+    Keys.TEAM_DEPT,
     Keys.LOCATION_CITY,
     Keys.EMPLOYMENT_TYPE,
     Keys.EMPLOYMENT_CONTRACT,
     Keys.EMPLOYMENT_START,
-    Keys.BENEFITS_ITEMS,
     Keys.RESPONSIBILITIES,
     Keys.HARD_REQ,
-    Keys.SOFT_REQ,
-    Keys.LANG_REQ,
-    Keys.TOOLS,
+    Keys.SALARY_CURRENCY,
+    Keys.SALARY_MIN,
+    Keys.SALARY_MAX,
 }
 
 # All known fields (including optional enrichment)
