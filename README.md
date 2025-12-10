@@ -15,6 +15,8 @@ The wizard now uses native Streamlit multi-page navigation (`app.py` + `pages/*`
 
 Navigation buttons prevent advancing until the current section is valid. All inputs persist in `st.session_state`, so you can revisit any page without losing data.
 
+The landing page now includes a bilingual intake card beneath the language selector. Provide exactly one source (job-ad URL, PDF/DOCX upload, or pasted text) and click **Autofill** to pre-populate company, seniority, and initial must-have skills before entering the Profile step.
+
 ## Ingestion fidelity (DE/EN)
 
 - PDF uploads use PyMuPDF with ligature and whitespace preservation so that bullet lists, headings, and special characters remain intact in the extracted raw text.
