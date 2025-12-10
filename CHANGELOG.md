@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Restored the landing-page intake block (URL/upload/text) so users can prefill
+  the wizard fields before starting the profile step.
 - Added a bidirectional `AppState` ⇄ NeedAnalysisProfile converter plus unit tests to keep validator inputs and exports aligned.
 - Added a Streamlit multi-page wizard (Profile → Summary) with validation-gated navigation, deterministic LLM helper buttons, forecast simulation, and JSON/Markdown exports.
 - Introduced a centralized `AppState` Pydantic model plus section-specific validators, keeping Streamlit session data, LLM helpers, and per-step error reporting aligned on the canonical field keys.
