@@ -16,8 +16,12 @@ logger = logging.getLogger(__name__)
 class ExtractionResult:
     """Structured extraction output with minimal, deterministic fields."""
 
+    job_title: str | None = None
     seniority: str | None = None
     company: str | None = None
+    location: str | None = None
+    employment_type: str | None = None
+    responsibilities: List[str] = field(default_factory=list)
     must_have_skills: List[str] = field(default_factory=list)
 
 
@@ -33,26 +37,187 @@ class BaseExtractor(Protocol):
 class TextExtractor:
     """Deterministic keyword-based extractor for plain text content."""
 
-    _COMPANY_PATTERN = re.compile(r"\b([A-Z][A-Za-z0-9&.-]*)\s+AG\b")
-    _SKILL_KEYWORDS: tuple[str, ...] = ("Python", "Pandas")
+    _COMPANY_PATTERNS: tuple[re.Pattern[str], ...] = (
+        re.compile(
+            r"\b(?:bei|für|at|join(?:ing)?\s+)?([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&.\-\s]{2,})\s+(?:sucht|hire|hiring|stellt)"
+        ),
+        re.compile(r"\b([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&.\-]{2,})\s+(?:GmbH|AG|SE|KG|UG)\b"),
+    )
+    _COMPANY_SUFFIX = re.compile(
+        r"\b(?:GmbH|AG|SE|KG|UG|Ltd\.?|Inc\.?|LLC|GmbH & Co\. KG)\b", re.IGNORECASE
+    )
+    _TITLE_KEYWORDS: tuple[str, ...] = (
+        "engineer",
+        "entwickler",
+        "developer",
+        "manager",
+        "analyst",
+        "consultant",
+        "scientist",
+        "architect",
+        "specialist",
+        "designer",
+        "owner",
+        "lead",
+        "leiter",
+    )
+    _SENIORITY_CUES: tuple[tuple[str, str], ...] = (
+        ("principal", "Principal"),
+        ("lead", "Lead"),
+        ("senior", "Senior"),
+        ("jr", "Junior"),
+        ("junior", "Junior"),
+        ("werkstudent", "Working Student"),
+        ("intern", "Intern"),
+    )
+    _EMPLOYMENT_TYPES: tuple[tuple[str, str], ...] = (
+        ("full-time", "Full-time"),
+        ("full time", "Full-time"),
+        ("vollzeit", "Vollzeit"),
+        ("part-time", "Part-time"),
+        ("part time", "Part-time"),
+        ("teilzeit", "Teilzeit"),
+    )
+    _LOCATION_PATTERN = re.compile(
+        r"(?:Standort|Location|Arbeitsort|based in|in)[:\s]+([A-ZÄÖÜ][\wÄÖÜäöüß .\-/]+)",
+        re.IGNORECASE,
+    )
+    _RESP_SECTION_PREFIXES: tuple[str, ...] = (
+        "aufgaben",
+        "deine aufgaben",
+        "was dich erwartet",
+        "responsibilities",
+        "what you will do",
+    )
+    _SKILL_KEYWORDS: tuple[str, ...] = (
+        "Python",
+        "Pandas",
+        "SQL",
+        "Azure",
+        "AWS",
+        "Docker",
+        "Kubernetes",
+        "Java",
+        "JavaScript",
+        "Typescript",
+        "Excel",
+    )
 
     def extract(self, raw: RawInput) -> ExtractionResult:
         content = raw.content
         result = ExtractionResult()
 
-        if "Senior" in content:
-            result.seniority = "Senior"
-
-        company_match = self._COMPANY_PATTERN.search(content)
-        if company_match:
-            result.company = f"{company_match.group(1)} AG"
-
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
         lowered = content.lower()
-        for keyword in self._SKILL_KEYWORDS:
-            if keyword.lower() in lowered:
-                result.must_have_skills.append(keyword)
+
+        result.company = self._extract_company(content)
+        result.seniority = self._extract_seniority(lowered)
+        result.job_title = self._extract_job_title(lines, result.seniority, content)
+        result.location = self._extract_location(content)
+        result.employment_type = self._extract_employment_type(lowered)
+        result.responsibilities = self._extract_responsibilities(lines)
+        result.must_have_skills = self._extract_skills(lowered)
 
         return result
+
+    def _extract_company(self, content: str) -> str | None:
+        for pattern in self._COMPANY_PATTERNS:
+            match = pattern.search(content)
+            if match:
+                candidate = match.group(1).strip()
+                candidate = self._COMPANY_SUFFIX.sub("", candidate).strip()
+                candidate = re.sub(
+                    r"\b(?:ist|is)$", "", candidate, flags=re.IGNORECASE
+                ).strip()
+                if len(candidate) > 80:
+                    continue
+                if candidate:
+                    return candidate
+        return None
+
+    def _extract_seniority(self, lowered: str) -> str | None:
+        for cue, label in self._SENIORITY_CUES:
+            if cue in lowered:
+                return label
+        return None
+
+    def _extract_job_title(
+        self, lines: list[str], seniority: str | None, raw_content: str
+    ) -> str | None:
+        title_candidates: list[str] = []
+        title_pattern = re.compile(
+            rf"(?i)(senior|lead|principal|junior)?\s*(?:(?:{'|'.join(self._TITLE_KEYWORDS)})[\w\s/\-()]{{0,60}})"
+        )
+
+        for line in lines:
+            normalized = line.strip("-•* ")
+            lower_line = normalized.lower()
+            if len(normalized) < 6 or len(normalized) > 120:
+                continue
+            if any(keyword in lower_line for keyword in self._TITLE_KEYWORDS):
+                title_candidates.append(normalized)
+                continue
+            match = title_pattern.search(normalized)
+            if match:
+                title_candidates.append(match.group(0).strip())
+
+        if title_candidates:
+            best = title_candidates[0]
+            if seniority and seniority not in best:
+                return f"{seniority} {best}"
+            return best
+        match = re.search(
+            r"(?:als|as)\s+([A-ZÄÖÜ][^.,\n]{5,80})", raw_content, re.IGNORECASE
+        )
+        if match:
+            return match.group(1).strip()
+        return None
+
+    def _extract_location(self, content: str) -> str | None:
+        match = self._LOCATION_PATTERN.search(content)
+        if match:
+            location = match.group(1).strip().strip(".,")
+            return location
+        return None
+
+    def _extract_employment_type(self, lowered: str) -> str | None:
+        for cue, label in self._EMPLOYMENT_TYPES:
+            if cue in lowered:
+                return label
+        return None
+
+    def _extract_responsibilities(self, lines: list[str]) -> list[str]:
+        responsibilities: list[str] = []
+        capturing = False
+        for line in lines:
+            lower_line = line.lower()
+            if any(
+                lower_line.startswith(prefix) for prefix in self._RESP_SECTION_PREFIXES
+            ):
+                capturing = True
+                continue
+            if capturing:
+                if not line.strip():
+                    if responsibilities:
+                        break
+                    continue
+                if line.startswith(("-", "•", "*")):
+                    responsibilities.append(line.lstrip("-•* ").strip())
+                    continue
+                if responsibilities and len(line) < 160:
+                    responsibilities.append(line.strip())
+        if not responsibilities:
+            for line in lines:
+                if line.startswith(("-", "•", "*")) and len(line) < 160:
+                    responsibilities.append(line.lstrip("-•* ").strip())
+        return responsibilities[:10]
+
+    def _extract_skills(self, lowered: str) -> list[str]:
+        skills: list[str] = []
+        for keyword in self._SKILL_KEYWORDS:
+            if keyword.lower() in lowered:
+                skills.append(keyword)
+        return skills
 
 
 EXTRACTORS: Dict[str, BaseExtractor] = {"text": TextExtractor()}

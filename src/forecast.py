@@ -14,7 +14,17 @@ def simulate_time_to_fill(config: ForecastConfig, runs: int = 500) -> ForecastRe
     if not config.is_ready():
         raise ValueError("Forecast configuration is incomplete.")
 
-    samples = [max(1.0, random.gauss(config.ttf_mean_days, config.ttf_std_days)) for _ in range(runs)]
+    assert config.ttf_mean_days is not None
+    assert config.ttf_std_days is not None
+    assert config.budget_total is not None
+    assert config.conv_top_to_screen is not None
+    assert config.conv_screen_to_offer is not None
+    assert config.conv_offer_to_hire is not None
+
+    samples = [
+        max(1.0, random.gauss(config.ttf_mean_days, config.ttf_std_days))
+        for _ in range(runs)
+    ]
     samples.sort()
 
     expected = statistics.mean(samples)
@@ -22,10 +32,10 @@ def simulate_time_to_fill(config: ForecastConfig, runs: int = 500) -> ForecastRe
     pessimistic = _percentile(samples, 0.9)
 
     hires_possible = (
-        (config.budget_total or 0)
-        * (config.conv_top_to_screen or 0)
-        * (config.conv_screen_to_offer or 0)
-        * (config.conv_offer_to_hire or 0)
+        config.budget_total
+        * config.conv_top_to_screen
+        * config.conv_screen_to_offer
+        * config.conv_offer_to_hire
     )
 
     return ForecastResult(

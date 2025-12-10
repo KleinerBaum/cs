@@ -155,3 +155,4 @@ print(result)
 - A centralized, typed `AppState` (see `state.py`) mirrors the Streamlit session, grouping profile, role, skills, compensation, and forecast data. Validation helpers in `validators.py` use the same keys to surface bilingual, per-step errors.
 - Set `DEBUG_LLM_RESPONSES=1` to display raw Responses API outputs directly in the Streamlit UI for troubleshooting JSON parsing. Keep this flag disabled in production to avoid noisy logs.
 - A lightweight validator in `core.validator.validate_required_fields` reports missing required fields and a confidence score (1 - missing/total, rounded to two decimals) so ingestion steps can surface clear QA signals.
+- The deterministic text extractor in `core.extractor.TextExtractor` now captures company names (with and without legal suffixes), job titles and seniority cues, basic location/employment-type hints, responsibilities, and common DE/EN skills to prefill at least half of the wizard fields from typical job ads.

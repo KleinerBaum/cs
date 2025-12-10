@@ -61,9 +61,25 @@ def _autofill_from_source(state: AppState, source_doc: SourceDocument) -> list[s
         state.profile.company_name = extraction.company
         updated_fields.append("Company / Unternehmen")
 
+    if extraction.job_title and not state.role.job_title:
+        state.role.job_title = extraction.job_title
+        updated_fields.append("Job Title / Stellenbezeichnung")
+
     if extraction.seniority and not state.role.seniority:
         state.role.seniority = extraction.seniority
         updated_fields.append("Seniority / Seniorität")
+
+    if extraction.location and not state.profile.primary_city:
+        state.profile.primary_city = extraction.location
+        updated_fields.append("Location / Standort")
+
+    if extraction.employment_type and not state.profile.employment_type:
+        state.profile.employment_type = extraction.employment_type
+        updated_fields.append("Employment Type / Beschäftigungsart")
+
+    if extraction.responsibilities and not state.skills.tasks:
+        state.skills.tasks = extraction.responsibilities
+        updated_fields.append("Responsibilities / Aufgaben")
 
     if extraction.must_have_skills and not state.skills.must_have:
         state.skills.must_have = extraction.must_have_skills
@@ -133,7 +149,9 @@ def main() -> None:
             icon="ℹ️",
         )
         process_intake = st.button(
-            "Autofill starten / Start autofill", type="primary", use_container_width=True
+            "Autofill starten / Start autofill",
+            type="primary",
+            use_container_width=True,
         )
 
     if process_intake:
