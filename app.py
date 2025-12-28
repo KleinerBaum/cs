@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 from core.extractor import run_extraction
+from core.role_extractor import extract_role_required_fields, llm_fill_role_fields
 from core.schemas import RawInput
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
+from src.llm_prompts import LLMClient
 from src.ingest import (
     IngestError,
     SourceDocument,
@@ -14,6 +18,7 @@ from src.ingest import (
     fetch_text_from_url,
     source_from_text,
 )
+from src.settings import configured_model
 from state import AppState, get_app_state, set_app_state
 
 
@@ -21,6 +26,34 @@ def _get_language() -> str:
     lang = st.session_state.get("lang", "de")
     st.session_state["lang"] = lang
     return lang
+
+
+def _resolve_api_key() -> str | None:
+    try:
+        raw_secrets = st.secrets  # type: ignore[attr-defined]
+    except Exception:
+        raw_secrets = None
+
+    if raw_secrets is not None:
+        try:
+            direct = raw_secrets.get("OPENAI_API_KEY")
+        except Exception:
+            direct = None
+        if isinstance(direct, str) and direct.strip():
+            return direct
+        try:
+            general = raw_secrets.get("general", {})
+        except Exception:
+            general = {}
+        if isinstance(general, dict):
+            nested = general.get("OPENAI_API_KEY")
+            if isinstance(nested, str) and nested.strip():
+                return nested
+
+    env_key = os.getenv("OPENAI_API_KEY")
+    if env_key:
+        return env_key
+    return None
 
 
 def _ingest_source(
@@ -57,17 +90,32 @@ def _autofill_from_source(state: AppState, source_doc: SourceDocument) -> list[s
     extraction = run_extraction(RawInput(text=source_doc.text, source_type="text"))
     updated_fields: list[str] = []
 
+    role_regex = extract_role_required_fields(source_doc.text)
+
     if extraction.company and not state.profile.company_name:
         state.profile.company_name = extraction.company
         updated_fields.append("Company / Unternehmen")
 
-    if extraction.job_title and not state.role.job_title:
+    if role_regex.job_title and not state.role.job_title:
+        state.role.job_title = role_regex.job_title
+        updated_fields.append("Job Title / Stellenbezeichnung")
+    elif extraction.job_title and not state.role.job_title:
         state.role.job_title = extraction.job_title
         updated_fields.append("Job Title / Stellenbezeichnung")
 
-    if extraction.seniority and not state.role.seniority:
+    if role_regex.seniority_level and not state.role.seniority:
+        state.role.seniority = role_regex.seniority_level
+        updated_fields.append("Seniority / Seniorität")
+    elif extraction.seniority and not state.role.seniority:
         state.role.seniority = extraction.seniority
         updated_fields.append("Seniority / Seniorität")
+
+    if role_regex.department and not state.role.department:
+        state.role.department = role_regex.department
+        updated_fields.append("Department / Abteilung")
+    elif extraction.department and not state.role.department:
+        state.role.department = extraction.department
+        updated_fields.append("Department / Abteilung")
 
     if extraction.location and not state.profile.primary_city:
         state.profile.primary_city = extraction.location
@@ -84,6 +132,32 @@ def _autofill_from_source(state: AppState, source_doc: SourceDocument) -> list[s
     if extraction.must_have_skills and not state.skills.must_have:
         state.skills.must_have = extraction.must_have_skills
         updated_fields.append("Must-have Skills / Muss-Fähigkeiten")
+
+    missing_role_fields = {
+        field
+        for field, value in {
+            "job_title": state.role.job_title,
+            "seniority_level": state.role.seniority,
+            "department": state.role.department,
+        }.items()
+        if not value
+    }
+
+    api_key = _resolve_api_key()
+    if missing_role_fields and api_key:
+        client = LLMClient(api_key=api_key, model=configured_model())
+        fallback = llm_fill_role_fields(
+            source_doc.text, client=client, missing_fields=missing_role_fields
+        )
+        if fallback.job_title and not state.role.job_title:
+            state.role.job_title = fallback.job_title
+            updated_fields.append("Job Title / Stellenbezeichnung")
+        if fallback.seniority_level and not state.role.seniority:
+            state.role.seniority = fallback.seniority_level
+            updated_fields.append("Seniority / Seniorität")
+        if fallback.department and not state.role.department:
+            state.role.department = fallback.department
+            updated_fields.append("Department / Abteilung")
 
     return updated_fields
 

@@ -53,6 +53,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 ## AI-powered assistance
 
 - **Field extraction:** In the *Import* step, if an OpenAI API key is configured, the app will attempt to extract structured information from the provided job ad text using an LLM (default model **gpt-4o-mini**, overrideable). Detected fields (e.g. company contact email or website) are prefilled with a provenance tag "Extracted". This speeds up the form-filling process.
+- **Role autofill:** The Role step now uses regex-first extraction (DE/EN) for job title, seniority, and department, including clean-title normalization and a structured LLM fallback when a key is present. Typical ads start with the required role fields already populated.
 - **Profile autofill:** Company, primary city, employment type, contract type, and start date now use a regex-first detector (DE/EN) before an LLM fallback for the missing pieces, so the Profile step starts with far fewer required-field errors.
 - **Mandatory-field recovery:** The extractor now explicitly prioritises all Pflichtfelder—especially job title, employment type, contract type, primary city, and required languages—and performs a targeted second LLM pass plus lightweight heuristics to backfill anything still missing.
 - **Auto-suggest for gaps:** After extraction, the wizard asks the LLM for plausible suggestions for any remaining required **or optional** fields. These values are inserted with the provenance "AI suggestion" so they are visually marked, fully editable, and easy to accept or overwrite.
