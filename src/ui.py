@@ -28,6 +28,8 @@ from core.profile_extractor import (
 )
 
 from .esco_client import ESCOError, occupation_related_skills, search_occupations
+from src.field_registry import required_field_keys
+
 from .i18n import LANG_DE, LANG_EN, as_lang, option_label, t
 from .ingest import (
     IngestError,
@@ -36,7 +38,7 @@ from .ingest import (
     fetch_text_from_url,
     source_from_text,
 )
-from .keys import ALL_FIELDS, REQUIRED_FIELDS, Keys
+from .keys import ALL_FIELDS, Keys
 from .llm_prompts import (
     EXTRACTION_INSTRUCTIONS,
     FILL_MISSING_INSTRUCTIONS,
@@ -116,6 +118,7 @@ SS_SALARY_FACTORS = "salary_factors"
 SS_SALARY_RESULT = "salary_prediction_result"
 SS_SALARY_NARRATIVE = "salary_prediction_narrative"
 SS_STEP_ERRORS = "step_errors"
+REQUIRED_FIELD_PATHS = required_field_keys()
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
@@ -666,7 +669,7 @@ def _heuristic_fill_required_fields(
 
 def _collect_paths_for_ai_suggestions(profile: dict[str, Any]) -> list[str]:
     missing: list[str] = []
-    for path in sorted(REQUIRED_FIELDS):
+    for path in sorted(REQUIRED_FIELD_PATHS):
         if is_missing(profile, path):
             missing.append(path)
     optional_paths = [q.path for q in question_bank() if not q.required]
@@ -1328,7 +1331,7 @@ def run_app() -> None:
     st.caption(t(lang, "app.tagline"))
 
     missing = missing_required(profile)
-    progress = 1.0 - (len(missing) / max(1, len(REQUIRED_FIELDS)))
+    progress = 1.0 - (len(missing) / max(1, len(REQUIRED_FIELD_PATHS)))
     st.progress(progress)
     if not missing:
         st.success(t(lang, "progress.ready"))

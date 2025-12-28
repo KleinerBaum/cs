@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from src.field_registry import required_field_keys_by_step
 from src.i18n import t
 from src.question_engine import question_bank, question_help, question_label
 from state import (
@@ -14,28 +15,12 @@ from state import (
     value_for_key,
 )
 
-_REQUIRED_PROFILE = (
-    "company.name",
-    "location.primary_city",
-    "employment.employment_type",
-    "employment.contract_type",
-    "employment.start_date",
-)
-_REQUIRED_ROLE = (
-    "position.job_title",
-    "position.seniority_level",
-    "team.department_name",
-)
-_REQUIRED_SKILLS = (
-    "responsibilities.items",
-    "requirements.hard_skills_required",
-)
-_REQUIRED_COMPENSATION = (
-    "compensation.salary_min",
-    "compensation.salary_max",
-    "compensation.currency",
-    "benefits.items",
-)
+_PAGE_REQUIRED_STEPS = {
+    "profile": ("company", "framework"),
+    "role": ("team",),
+    "skills": ("tasks", "skills"),
+    "compensation": ("benefits",),
+}
 
 
 def _non_empty(value: Any) -> bool:
@@ -59,6 +44,21 @@ def _build_error(path: str, lang: str) -> tuple[str, str]:
     return path, message
 
 
+def _required_paths_for_steps(steps: Iterable[str]) -> tuple[str, ...]:
+    required: list[str] = []
+    for step in steps:
+        required.extend(required_field_keys_by_step(step))
+    # Preserve ordering while removing duplicates
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for path in required:
+        if path in seen:
+            continue
+        seen.add(path)
+        ordered.append(path)
+    return tuple(ordered)
+
+
 def _collect_missing(
     required_paths: Iterable[str], state: AppState, *, lang: str
 ) -> list[tuple[str, str]]:
@@ -72,24 +72,42 @@ def _collect_missing(
 
 def validate_profile(profile: ProfileState, *, lang: str) -> list[tuple[str, str]]:
     state = app_state_from_profile(profile)
-    return _collect_missing(_REQUIRED_PROFILE, state, lang=lang)
+    return _collect_missing(
+        _required_paths_for_steps(_PAGE_REQUIRED_STEPS["profile"]), state, lang=lang
+    )
 
 
 def validate_role(role: RoleState, *, lang: str) -> list[tuple[str, str]]:
     state = app_state_from_profile(role)
-    return _collect_missing(_REQUIRED_ROLE, state, lang=lang)
+    return _collect_missing(
+        _required_paths_for_steps(_PAGE_REQUIRED_STEPS["role"]), state, lang=lang
+    )
 
 
 def validate_skills(skills: SkillsState, *, lang: str) -> list[tuple[str, str]]:
     state = app_state_from_profile(skills)
-    return _collect_missing(_REQUIRED_SKILLS, state, lang=lang)
+    return _collect_missing(
+        _required_paths_for_steps(_PAGE_REQUIRED_STEPS["skills"]), state, lang=lang
+    )
 
 
 def validate_compensation(
     comp: CompensationState, *, lang: str
 ) -> list[tuple[str, str]]:
     state = app_state_from_profile(comp)
-    errors = _collect_missing(_REQUIRED_COMPENSATION, state, lang=lang)
+    errors = _collect_missing(
+        _required_paths_for_steps(_PAGE_REQUIRED_STEPS["compensation"]),
+        state,
+        lang=lang,
+    )
+    errors.extend(_range_errors(comp, lang))
+    return errors
+
+
+def _range_errors(
+    comp: CompensationState, lang: str
+) -> list[tuple[str, str]]:
+    errors: list[tuple[str, str]] = []
     if (
         comp.salary_min is not None
         and comp.salary_max is not None
@@ -107,17 +125,10 @@ def validate_compensation(
 def validate_app_step(app_state: AppState, step: str, *, lang: str) -> dict[str, str]:
     """Map a wizard step to validation errors keyed by profile path."""
 
-    errors: list[tuple[str, str]]
-    if step == "company":
-        errors = validate_profile(app_state.profile, lang=lang)
-    elif step in {"team", "framework", "tasks"}:
-        errors = validate_role(app_state.role, lang=lang)
-    elif step == "skills":
-        errors = validate_skills(app_state.skills, lang=lang)
-    elif step == "benefits":
-        errors = validate_compensation(app_state.compensation, lang=lang)
-    else:
-        errors = []
+    required_paths = _required_paths_for_steps((step,))
+    errors = _collect_missing(required_paths, app_state, lang=lang)
+    if step == "benefits":
+        errors.extend(_range_errors(app_state.compensation, lang))
     return {field: message for field, message in errors}
 
 

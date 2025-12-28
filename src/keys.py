@@ -79,23 +79,6 @@ class Keys:
     ESCO_SUGGESTED_SKILLS = "position.esco_suggested_skills"
 
 
-# Required fields (Pflichtfelder)
-REQUIRED_FIELDS: set[str] = {
-    Keys.COMPANY_NAME,
-    Keys.POSITION_TITLE,
-    Keys.POSITION_SENIORITY,
-    Keys.TEAM_DEPT,
-    Keys.LOCATION_CITY,
-    Keys.EMPLOYMENT_TYPE,
-    Keys.EMPLOYMENT_CONTRACT,
-    Keys.EMPLOYMENT_START,
-    Keys.RESPONSIBILITIES,
-    Keys.HARD_REQ,
-    Keys.SALARY_CURRENCY,
-    Keys.SALARY_MIN,
-    Keys.SALARY_MAX,
-}
-
 # All known fields (including optional enrichment)
 ALL_FIELDS: set[str] = {
     value for name, value in Keys.__dict__.items()

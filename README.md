@@ -154,7 +154,7 @@ print(result)
 
 ## Developer notes
 
-- All structured field keys live in `src/keys.py` (`Keys` class). Reuse these constants for prompts, UI labels, and exports to avoid drift between modules.
+- All structured field keys live in `src/keys.py` (`Keys` class). Reuse these constants for prompts, UI labels, and exports to avoid drift between modules. Required flags, labels, and per-step mappings are centralized in `src/field_registry.py` and power the question engine, validators, and pipeline runner.
 - A centralized, typed `AppState` (see `state.py`) mirrors the Streamlit session, grouping profile, role, skills, compensation, and forecast data. Validation helpers in `validators.py` use the same keys to surface bilingual, per-step errors.
 - Set `DEBUG_LLM_RESPONSES=1` to display raw Responses API outputs directly in the Streamlit UI for troubleshooting JSON parsing. Keep this flag disabled in production to avoid noisy logs.
 - A lightweight validator in `core.validator.validate_required_fields` reports missing required fields and a confidence score (1 - missing/total, rounded to two decimals) so ingestion steps can surface clear QA signals.

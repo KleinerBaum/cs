@@ -25,10 +25,14 @@ def test_no_missing_fields(full_payload: dict[str, str]):
 
 
 def test_partial_missing_fields(full_payload: dict[str, str]):
-    full_payload.pop("contract_type")
-    full_payload.pop("employment_type")
+    missing = REQUIRED[:2]
+    for key in missing:
+        full_payload.pop(key)
 
     result = validate_required_fields(full_payload)
 
-    assert set(result["missing_required"]) == {"contract_type", "employment_type"}
-    assert result["confidence"] == 0.67
+    assert set(result["missing_required"]) == set(missing)
+    expected_confidence = max(
+        0.0, round(1.0 - len(missing) / len(REQUIRED), 2)
+    )
+    assert result["confidence"] == expected_confidence

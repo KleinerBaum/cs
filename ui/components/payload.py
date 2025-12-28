@@ -6,6 +6,8 @@ from typing import Any, Mapping
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from src.keys import Keys
+
 
 class PipelinePayload(BaseModel):
     """Normalized payload expected by the deterministic pipeline.
@@ -51,4 +53,17 @@ class PipelinePayload(BaseModel):
     def to_canonical_dict(self) -> dict[str, Any]:
         """Return payload using canonical field names only."""
 
-        return self.model_dump(exclude_none=True)
+        canonical_map = {
+            "company_name": Keys.COMPANY_NAME,
+            "job_title": Keys.POSITION_TITLE,
+            "seniority": Keys.POSITION_SENIORITY,
+            "contract_type": Keys.EMPLOYMENT_CONTRACT,
+            "employment_type": Keys.EMPLOYMENT_TYPE,
+            "start_date": Keys.EMPLOYMENT_START,
+            "primary_city": Keys.LOCATION_CITY,
+        }
+
+        raw_payload = self.model_dump(exclude_none=True)
+        return {
+            canonical_map.get(key, key): value for key, value in raw_payload.items()
+        }
