@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a regex-first role extractor with clean title normalization and an LLM fallback to prefill job title, seniority level, and department when the source text allows it.
 - Switched NeedAnalysisProfile metadata timestamps to timezone-aware UTC values to avoid deprecation warnings and keep exports consistent.
 - Added a regex-first profile extractor with LLM fallback to prefill company, city, employment/contract type, and start date, plus DE/EN unit coverage.
 - Expanded the deterministic text extractor to capture company, title, location, employment type, responsibilities, and skills, wiring autofill into matching AppState paths and covering DE/EN job-ad samples with tests.

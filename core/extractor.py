@@ -8,6 +8,11 @@ import re
 from typing import Dict, List, Protocol
 
 from core.schemas import RawInput
+from core.role_extractor import (
+    clean_title,
+    detect_seniority_level,
+    extract_role_required_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,7 @@ class ExtractionResult:
 
     job_title: str | None = None
     seniority: str | None = None
+    department: str | None = None
     company: str | None = None
     location: str | None = None
     employment_type: str | None = None
@@ -171,9 +177,19 @@ class TextExtractor:
         lines = [line.strip() for line in content.splitlines() if line.strip()]
         lowered = content.lower()
 
+        role_fields = extract_role_required_fields(content)
+        result.job_title = role_fields.job_title
+        result.seniority = role_fields.seniority_level
+        result.department = role_fields.department
+
         result.company = self._extract_company(content)
-        result.seniority = self._extract_seniority(lowered)
+        if not result.seniority:
+            result.seniority = self._extract_seniority(lowered)
+        if not result.seniority and result.job_title:
+            result.seniority = detect_seniority_level(result.job_title)
         result.job_title = self._extract_job_title(lines, result.seniority, content)
+        if not result.job_title and role_fields.job_title:
+            result.job_title = role_fields.job_title
         result.location = self._extract_location(content)
         result.employment_type = self._extract_employment_type(lowered)
         result.responsibilities = self._extract_responsibilities(lines)
@@ -211,7 +227,7 @@ class TextExtractor:
         )
 
         for line in lines:
-            normalized = line.strip("-•* ")
+            normalized = clean_title(line)
             lower_line = normalized.lower()
             if len(normalized) < 6 or len(normalized) > 120:
                 continue
