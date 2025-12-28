@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Switched NeedAnalysisProfile metadata timestamps to timezone-aware UTC values to avoid deprecation warnings and keep exports consistent.
 - Expanded the deterministic text extractor to capture company, title, location, employment type, responsibilities, and skills, wiring autofill into matching AppState paths and covering DE/EN job-ad samples with tests.
 - Restored the landing-page intake block (URL/upload/text) so users can prefill
   the wizard fields before starting the profile step.

@@ -34,6 +34,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - **Session state:** Form data persists in `st.session_state` as you navigate. You can reset the session via the sidebar. The
   centralized `AppState` can be reconstructed from a NeedAnalysisProfile mapping and exported back for deterministic pipeline
   runs, keeping UI inputs and payloads aligned.
+- **UTC metadata:** NeedAnalysisProfile `created_at`/`updated_at` timestamps are recorded in UTC to keep exports consistent across timezones and avoid deprecated naive datetime usage.
 - **Sidebar input overview:** Below the **"Reset session"** button, each step now has a collapsible summary (company, team, framework, etc.) showing all fields with their current values and a quick **"Go to step"** jump link.
 
 ## Branding & layout

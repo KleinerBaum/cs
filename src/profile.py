@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import copy
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Literal
 
 from .keys import REQUIRED_FIELDS
 
 Provenance = Literal["extracted", "user", "ai_suggestion"]
 
+
 def now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
 
 def new_profile(ui_language: str = "de") -> dict[str, Any]:
     return {
@@ -26,19 +33,23 @@ def new_profile(ui_language: str = "de") -> dict[str, Any]:
         "fields": {},
     }
 
+
 def _jsonable(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     return value
 
+
 def get_record(profile: dict[str, Any], path: str) -> dict[str, Any] | None:
     return profile.get("fields", {}).get(path)
+
 
 def get_value(profile: dict[str, Any], path: str, default: Any = None) -> Any:
     rec = get_record(profile, path)
     if not rec:
         return default
     return rec.get("value", default)
+
 
 def set_field(
     profile: dict[str, Any],
@@ -59,9 +70,11 @@ def set_field(
     profile.setdefault("fields", {})[path] = rec
     profile.setdefault("meta", {})["updated_at"] = now_iso()
 
+
 def clear_field(profile: dict[str, Any], path: str) -> None:
     profile.get("fields", {}).pop(path, None)
     profile.setdefault("meta", {})["updated_at"] = now_iso()
+
 
 def upsert_field(
     profile: dict[str, Any],
@@ -78,7 +91,8 @@ def upsert_field(
 
     # If an existing user-provided value exists, and we're trying to set via AI, skip
     if (
-        existing and prefer_existing_user
+        existing
+        and prefer_existing_user
         and existing.get("provenance") == "user"
         and provenance != "user"
     ):
@@ -103,8 +117,16 @@ def upsert_field(
     ):
         return False
 
-    set_field(profile, path, value, provenance=provenance, confidence=confidence, evidence=evidence)
+    set_field(
+        profile,
+        path,
+        value,
+        provenance=provenance,
+        confidence=confidence,
+        evidence=evidence,
+    )
     return True
+
 
 def is_missing_value(value: Any) -> bool:
     if value is None:
@@ -115,23 +137,30 @@ def is_missing_value(value: Any) -> bool:
         return True
     return False
 
+
 def is_missing(profile: dict[str, Any], path: str) -> bool:
     rec = get_record(profile, path)
     if not rec:
         return True
     return is_missing_value(rec.get("value"))
 
+
 def missing_required(profile: dict[str, Any]) -> list[str]:
     return [p for p in sorted(REQUIRED_FIELDS) if is_missing(profile, p)]
 
-def flatten_values(profile: dict[str, Any], include_meta: bool = False) -> dict[str, Any]:
+
+def flatten_values(
+    profile: dict[str, Any], include_meta: bool = False
+) -> dict[str, Any]:
     out = {path: rec.get("value") for path, rec in profile.get("fields", {}).items()}
     if include_meta:
         out = {"_meta": copy.deepcopy(profile.get("meta", {})), **out}
     return out
 
+
 def to_json(profile: dict[str, Any], indent: int = 2) -> str:
     return json.dumps(profile, ensure_ascii=False, indent=indent)
+
 
 def update_source_language(profile: dict[str, Any], lang: str | None) -> None:
     profile.setdefault("meta", {})["source_language_detected"] = lang
