@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Switched the centralized OpenAI model config to default to `gpt-5-nano`,
+  honoring `CS_OPENAI_MODEL` (with legacy override fallback) and ensuring all
+  LLM entry points share the same resolution with updated tests and docs.
 - Added a centralized field registry that unifies keys, labels, and required flags across the Streamlit wizard, validators, and pipeline runner, plus tests to guard against drift.
 - Added a regex-first role extractor with clean title normalization and an LLM fallback to prefill job title, seniority level, and department when the source text allows it.
 - Switched NeedAnalysisProfile metadata timestamps to timezone-aware UTC values to avoid deprecation warnings and keep exports consistent.

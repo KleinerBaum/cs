@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import cast
+
 from core.role_extractor import (
     clean_title,
     extract_role_required_fields,
     llm_fill_role_fields,
 )
+from src.llm_prompts import LLMClient
 
 
 class DummyLLMClient:
@@ -73,7 +76,7 @@ def test_llm_fallback_populates_missing_fields() -> None:
     )
     client = DummyLLMClient(payload)
 
-    result = llm_fill_role_fields("irrelevant", client=client)
+    result = llm_fill_role_fields("irrelevant", client=cast(LLMClient, client))
 
     assert result.job_title == "Senior UX Designer"
     assert result.seniority_level == "Senior"
@@ -90,7 +93,9 @@ def test_llm_fallback_limits_to_requested_fields() -> None:
     client = DummyLLMClient(payload)
 
     result = llm_fill_role_fields(
-        "irrelevant", client=client, missing_fields={"department"}
+        "irrelevant",
+        client=cast(LLMClient, client),
+        missing_fields={"department"},
     )
 
     assert result.department == "Finance"
