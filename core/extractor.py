@@ -34,9 +34,67 @@ class BaseExtractor(Protocol):
         """Parse raw input into structured fields."""
 
 
+CONNECTOR_WORDS = {
+    "am",
+    "an",
+    "im",
+    "in",
+    "bei",
+    "der",
+    "die",
+    "das",
+    "de",
+    "del",
+    "della",
+    "da",
+    "do",
+    "dos",
+    "du",
+    "van",
+    "von",
+    "of",
+    "la",
+    "le",
+}
+
+
+def clean_city(raw: str) -> str:
+    """Normalize a raw city string while keeping meaningful multi-word names intact."""
+
+    sanitized = " ".join(raw.split()).strip(",.;:()[]")
+    if not sanitized:
+        return sanitized
+
+    tokens = sanitized.split(" ")
+    trimmed: list[str] = []
+
+    for token in tokens:
+        if token and (token[0].isupper() or token[0] in "ÄÖÜ"):
+            trimmed.append(token)
+            continue
+        if token.lower() in CONNECTOR_WORDS:
+            trimmed.append(token)
+            continue
+        break
+
+    if not trimmed:
+        return sanitized
+
+    return " ".join(trimmed)
+
+
 class TextExtractor:
     """Deterministic keyword-based extractor for plain text content."""
 
+    _LOCATION_LABELS = (
+        "Hauptstandort",
+        "Stadt",
+        "Ort",
+        "Arbeitsort",
+        "Standort",
+        "Location",
+        "Primary City",
+    )
     _COMPANY_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.compile(
             r"\b(?:bei|für|at|join(?:ing)?\s+)?([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&.\-\s]{2,})\s+(?:sucht|hire|hiring|stellt)"
@@ -78,9 +136,12 @@ class TextExtractor:
         ("part time", "Part-time"),
         ("teilzeit", "Teilzeit"),
     )
+    _LOCATION_LABEL_TERMS = {label.lower() for label in _LOCATION_LABELS}
+    _LABELED_CITY_PATTERN = re.compile(
+        r"(?im)^(?:" + "|".join(_LOCATION_LABELS) + r")[\s/:\-]*([A-ZÄÖÜ][^\n\r]*)"
+    )
     _LOCATION_PATTERN = re.compile(
-        r"(?:Standort|Location|Arbeitsort|based in|in)[:\s]+([A-ZÄÖÜ][\wÄÖÜäöüß .\-/]+)",
-        re.IGNORECASE,
+        r"(?im)(?:Standort|Location|Arbeitsort|based in|in)[:\s]+([A-ZÄÖÜ][^\n\r]*)",
     )
     _RESP_SECTION_PREFIXES: tuple[str, ...] = (
         "aufgaben",
@@ -174,10 +235,18 @@ class TextExtractor:
         return None
 
     def _extract_location(self, content: str) -> str | None:
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
+
+        for line in lines:
+            labeled_match = self._LABELED_CITY_PATTERN.match(line)
+            if labeled_match:
+                candidate = clean_city(labeled_match.group(1))
+                if candidate and candidate.lower() not in self._LOCATION_LABEL_TERMS:
+                    return candidate
+
         match = self._LOCATION_PATTERN.search(content)
         if match:
-            location = match.group(1).strip().strip(".,")
-            return location
+            return clean_city(match.group(1))
         return None
 
     def _extract_employment_type(self, lowered: str) -> str | None:
