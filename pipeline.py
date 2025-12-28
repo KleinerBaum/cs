@@ -9,6 +9,7 @@ from core.enricher import EnrichmentResult, run_enrichment
 from core.extractor import ExtractionResult, run_extraction
 from core.schemas import Enrichment, RawInput, VacancyCore, VacancyValidated
 from core.validator import ValidationResult, validate_required_fields
+from src.keys import Keys
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +80,12 @@ def run_pipeline(raw_input: RawInput, payload: dict[str, Any] | None = None) -> 
 if __name__ == "__main__":  # pragma: no cover - manual smoke test
     sample_raw = RawInput(content="Senior Data Scientist at ACME AG using Python and Pandas")
     sample_payload = {
-        "company_name": "ACME AG",
-        "job_title": "Data Scientist",
-        "contract_type": "Full-time",
-        "employment_type": "Permanent",
-        "start_date": "2024-09-01",
-        "primary_city": "Berlin",
+        Keys.COMPANY_NAME: "ACME AG",
+        Keys.POSITION_TITLE: "Data Scientist",
+        Keys.EMPLOYMENT_CONTRACT: "Full-time",
+        Keys.EMPLOYMENT_TYPE: "Permanent",
+        Keys.EMPLOYMENT_START: "2024-09-01",
+        Keys.LOCATION_CITY: "Berlin",
     }
 
     result = run_pipeline(sample_raw, sample_payload)

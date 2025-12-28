@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a centralized field registry that unifies keys, labels, and required flags across the Streamlit wizard, validators, and pipeline runner, plus tests to guard against drift.
 - Added a regex-first role extractor with clean title normalization and an LLM fallback to prefill job title, seniority level, and department when the source text allows it.
 - Switched NeedAnalysisProfile metadata timestamps to timezone-aware UTC values to avoid deprecation warnings and keep exports consistent.
 - Added a regex-first profile extractor with LLM fallback to prefill company, city, employment/contract type, and start date, plus DE/EN unit coverage.

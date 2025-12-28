@@ -5,7 +5,7 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any, Literal
 
-from .keys import REQUIRED_FIELDS
+from src.field_registry import required_field_keys
 
 Provenance = Literal["extracted", "user", "ai_suggestion"]
 
@@ -146,7 +146,7 @@ def is_missing(profile: dict[str, Any], path: str) -> bool:
 
 
 def missing_required(profile: dict[str, Any]) -> list[str]:
-    return [p for p in sorted(REQUIRED_FIELDS) if is_missing(profile, p)]
+    return [p for p in sorted(required_field_keys()) if is_missing(profile, p)]
 
 
 def flatten_values(

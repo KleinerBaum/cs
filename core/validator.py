@@ -1,20 +1,19 @@
-"""Validation helpers for required vacancy fields."""
-
-from __future__ import annotations
-
 import logging
 from typing import Any, List, Mapping, TypedDict
 
+from src.field_registry import required_field_keys
+
 logger = logging.getLogger(__name__)
 
-REQUIRED: List[str] = [
-    "company_name",
-    "job_title",
-    "contract_type",
-    "employment_type",
-    "start_date",
-    "primary_city",
-]
+
+def _value_for_field(payload: Mapping[str, Any], field: str) -> Any:
+    if field in payload:
+        return payload.get(field)
+    underscored = field.replace(".", "_")
+    return payload.get(underscored)
+
+
+REQUIRED: List[str] = sorted(required_field_keys())
 
 
 class ValidationResult(TypedDict):
@@ -34,7 +33,9 @@ def validate_required_fields(payload: Mapping[str, Any]) -> ValidationResult:
 
     logger.debug("Validating required fields: %s", list(payload.keys()))
 
-    missing_required = [field for field in REQUIRED if not payload.get(field)]
+    missing_required = [
+        field for field in REQUIRED if not _value_for_field(payload, field)
+    ]
     total_required = len(REQUIRED)
 
     if total_required == 0:
