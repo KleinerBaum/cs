@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Parameter allow-list per model to avoid sending unsupported options
 _ALLOWED_PARAMS: dict[str, set[str]] = {
-    "gpt-4o-mini": {
+    "gpt-5-nano": {
         "input",
         "instructions",
         "max_output_tokens",

@@ -52,7 +52,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 
 ## AI-powered assistance
 
-- **Field extraction:** In the *Import* step, if an OpenAI API key is configured, the app will attempt to extract structured information from the provided job ad text using an LLM (default model **gpt-4o-mini**, overrideable). Detected fields (e.g. company contact email or website) are prefilled with a provenance tag "Extracted". This speeds up the form-filling process.
+- **Field extraction:** In the *Import* step, if an OpenAI API key is configured, the app will attempt to extract structured information from the provided job ad text using an LLM (default model **gpt-5-nano**, overrideable). Detected fields (e.g. company contact email or website) are prefilled with a provenance tag "Extracted". This speeds up the form-filling process.
 - **Role autofill:** The Role step now uses regex-first extraction (DE/EN) for job title, seniority, and department, including clean-title normalization and a structured LLM fallback when a key is present. Typical ads start with the required role fields already populated.
 - **Profile autofill:** Company, primary city, employment type, contract type, and start date now use a regex-first detector (DE/EN) before an LLM fallback for the missing pieces, so the Profile step starts with far fewer required-field errors.
 - **Mandatory-field recovery:** The extractor now explicitly prioritises all Pflichtfelder—especially job title, employment type, contract type, primary city, and required languages—and performs a targeted second LLM pass plus lightweight heuristics to backfill anything still missing.
@@ -61,7 +61,7 @@ The app features a bilingual, multi-step wizard to collect all required fields b
 - **Responses API compatibility:** Structured extraction uses the Responses API `text.format` field (supported in `openai==2.9.0`) to request JSON outputs without raising type errors during intake.
 - **English translation:** As noted, the LLM can translate key fields to English for international job ads. The translated values are stored in parallel fields (e.g., `job_title_en`) and used when you switch to English output.
 - **Scoped AI buttons:** Dedicated buttons now trigger exactly one action each (role summary, tasks, core skills, nice-to-have skills) and leave other fields untouched. Unsupported sampling parameters are stripped before sending the payload so models that do not accept `temperature` or `top_p` still work.
-- **Model flexibility with safe default:** The sidebar now offers an optional model selector (defaulting to **gpt-4o-mini**). You can also set `OPENAI_MODEL` (Streamlit secrets or environment) to pin a specific model like `gpt-3.5-turbo` for cost-sensitive runs. The app continues to omit unsupported sampling parameters for Responses API compatibility.
+- **Model flexibility with safe default:** The sidebar now offers an optional model selector (defaulting to **gpt-5-nano**). You can also set `CS_OPENAI_MODEL` (Streamlit secrets or environment) to pin a specific model like `gpt-3.5-turbo` for cost-sensitive runs. The app continues to omit unsupported sampling parameters for Responses API compatibility.
 - **Resilient error handling:** Intake LLM calls surface targeted configuration hints for invalid models/parameters and separate retry/backoff guidance for network or timeout issues (bilingual messaging).
 - **Structured JSON + fallback:** LLM calls now request structured Responses API outputs (`response_format`) so extraction and suggestion payloads stay valid JSON without manual clean-up. If a response still cannot be parsed or the first call fails, the app runs a low-cost recovery request via `fill_missing_fields_prompt` for prioritized missing paths (source text only) with short backoff. If this also fails, the UI surfaces a bilingual warning and continues with heuristic fills instead of aborting.
 
@@ -82,16 +82,16 @@ You can add the key to `.streamlit/secrets.toml` or as an environment variable:
 
 ```toml
 OPENAI_API_KEY = "sk-..."
-OPENAI_MODEL = "gpt-4o-mini"  # Optional: override the default model for all requests
+CS_OPENAI_MODEL = "gpt-5-nano"  # Optional: override the default model for all requests
 
 # or under a [general] section:
 [general]
 OPENAI_API_KEY = "sk-..."
-OPENAI_MODEL = "gpt-3.5-turbo"
+CS_OPENAI_MODEL = "gpt-3.5-turbo"
 
 ```
 
-Tip: use `OPENAI_MODEL=gpt-3.5-turbo` to test a cheaper model end-to-end, or switch back to **gpt-4o-mini** in the sidebar for higher-quality responses.
+Tip: use `CS_OPENAI_MODEL=gpt-3.5-turbo` to test a cheaper model end-to-end, or switch back to **gpt-5-nano** in the sidebar for higher-quality responses.
 
 ## Extractor adapters
 

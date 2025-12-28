@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from src.llm_prompts import LLMClient, response_to_text, safe_parse_json
+from src.settings import DEFAULT_MODEL
 
 
 class _DummyContent:
@@ -60,7 +61,7 @@ def test_response_to_text_handles_output_json() -> None:
 def test_llm_client_requests_structured_output(monkeypatch: Any) -> None:
     monkeypatch.setattr("src.llm_prompts.OpenAI", _FakeOpenAI)
 
-    client = LLMClient(api_key="sk-test", model="gpt-4o-mini")
+    client = LLMClient(api_key="sk-test", model=DEFAULT_MODEL)
 
     text = client.text("hi", instructions="return json", max_output_tokens=12)
     parsed = json.loads(text)
@@ -72,7 +73,9 @@ def test_llm_client_requests_structured_output(monkeypatch: Any) -> None:
     }
 
 
-def test_llm_client_intake_call_path_does_not_raise_type_error(monkeypatch: Any) -> None:
+def test_llm_client_intake_call_path_does_not_raise_type_error(
+    monkeypatch: Any,
+) -> None:
     class _StrictResponses:
         def __init__(self) -> None:
             self.last_kwargs: dict[str, Any] | None = None
@@ -108,13 +111,15 @@ def test_llm_client_intake_call_path_does_not_raise_type_error(monkeypatch: Any)
 
     monkeypatch.setattr("src.llm_prompts.OpenAI", _StrictOpenAI)
 
-    client = LLMClient(api_key="sk-test", model="gpt-4o-mini")
+    client = LLMClient(api_key="sk-test", model=DEFAULT_MODEL)
 
-    text = client.text("intake prompt", instructions="return json", max_output_tokens=64)
+    text = client.text(
+        "intake prompt", instructions="return json", max_output_tokens=64
+    )
 
     assert json.loads(text) == {"ok": True}
     assert client.client.responses.last_kwargs == {
-        "model": "gpt-4o-mini",
+        "model": DEFAULT_MODEL,
         "input": "intake prompt",
         "instructions": "return json",
         "max_output_tokens": 64,

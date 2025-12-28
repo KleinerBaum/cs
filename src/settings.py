@@ -7,10 +7,11 @@ from typing import Any
 APP_NAME = "CognitiveStaffing – Need Analysis Wizard"
 
 # ---- OpenAI / LLM
-DEFAULT_MODEL = "gpt-4o-mini"  # Widely available, cost-efficient default
+DEFAULT_MODEL = "gpt-5-nano"  # Fastest low-cost default
 DEFAULT_TEMPERATURE = 0.2
 DEFAULT_MAX_OUTPUT_TOKENS = 1400
-MODEL_ENV_KEY = "OPENAI_MODEL"
+MODEL_ENV_KEY = "CS_OPENAI_MODEL"
+_LEGACY_MODEL_ENV_KEYS: tuple[str, ...] = ("OPENAI_MODEL",)
 
 # Keep prompts bounded to avoid accidental huge requests
 MAX_SOURCE_TEXT_CHARS = 70_000
@@ -61,8 +62,18 @@ def configured_model(default_model: str = DEFAULT_MODEL) -> str:
     if env_override:
         return env_override
 
+    for legacy_key in _LEGACY_MODEL_ENV_KEYS:
+        legacy_env = os.getenv(legacy_key, "").strip()
+        if legacy_env:
+            return legacy_env
+
     secret_override = _get_streamlit_secret(MODEL_ENV_KEY)
     if secret_override:
         return secret_override
+
+    for legacy_key in _LEGACY_MODEL_ENV_KEYS:
+        legacy_secret = _get_streamlit_secret(legacy_key)
+        if legacy_secret:
+            return legacy_secret
 
     return default_model
