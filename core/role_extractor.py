@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, Iterable
 
-from src.llm_prompts import LLMClient, safe_parse_json
+from src.llm_prompts import LLMClient, parse_structured_response
 from src.settings import MAX_SOURCE_TEXT_CHARS
 
 
@@ -202,10 +202,12 @@ def llm_fill_role_fields(
         max_output_tokens=480,
         response_format=_ROLE_SCHEMA,
     )
-    parsed = safe_parse_json(raw) if raw else {}
+    parsed, parse_ok = parse_structured_response(
+        raw, response_format=_ROLE_SCHEMA, context="role_fallback"
+    )
 
     result = RoleExtraction()
-    if not isinstance(parsed, dict):
+    if not parse_ok or not isinstance(parsed, dict):
         return result
 
     evidence_map = (

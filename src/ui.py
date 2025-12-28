@@ -41,14 +41,19 @@ from .ingest import (
 from .keys import ALL_FIELDS, Keys
 from .llm_prompts import (
     EXTRACTION_INSTRUCTIONS,
+    EXTRACTION_RESPONSE_FORMAT,
     FILL_MISSING_INSTRUCTIONS,
+    FILL_RESPONSE_FORMAT,
     FOLLOWUP_INSTRUCTIONS,
-    SUGGEST_MISSING_INSTRUCTIONS,
-    TRANSLATE_INSTRUCTIONS,
     LLMClient,
+    SUGGEST_MISSING_INSTRUCTIONS,
+    SUGGEST_RESPONSE_FORMAT,
+    TRANSLATE_INSTRUCTIONS,
+    TRANSLATION_RESPONSE_FORMAT,
     extraction_user_prompt,
     fill_missing_fields_prompt,
     followup_user_prompt,
+    parse_structured_response,
     safe_parse_json,
     suggest_missing_fields_prompt,
     translate_user_prompt,
@@ -566,7 +571,11 @@ def _apply_llm_profile_fallback(
         max_output_tokens=480,
         response_format=_PROFILE_SCHEMA,
     )
-    parsed = safe_parse_json(raw) if raw else {}
+    parsed, parse_ok = parse_structured_response(
+        raw, response_format=_PROFILE_SCHEMA, context="profile_fallback"
+    )
+    if not parse_ok:
+        return 0
     updates = 0
 
     for path in missing_paths:
@@ -1472,8 +1481,20 @@ def _render_intake(
         st.rerun()
         return
 
-    def _parse_or_warn(raw: str | None, *, context: str) -> tuple[Any, bool]:
+    def _parse_or_warn(
+        raw: str | None,
+        *,
+        context: str,
+        response_format: dict[str, Any] | None = None,
+    ) -> tuple[Any, bool]:
         normalized_raw = raw or ""
+        if response_format:
+            parsed, ok = parse_structured_response(
+                normalized_raw, response_format=response_format, context=context
+            )
+            if ok:
+                return parsed, True
+            return {}, False
         try:
             return safe_parse_json(normalized_raw), True
         except ValueError as exc:
@@ -1522,9 +1543,14 @@ def _render_intake(
             extraction_user_prompt(source_excerpt),
             instructions=EXTRACTION_INSTRUCTIONS,
             max_output_tokens=1000,
+            response_format=EXTRACTION_RESPONSE_FORMAT,
         )
         _log_llm_raw_response(raw, context="intake_extract")
-        data, primary_parse_ok = _parse_or_warn(raw, context="intake_extract")
+        data, primary_parse_ok = _parse_or_warn(
+            raw,
+            context="intake_extract",
+            response_format=EXTRACTION_RESPONSE_FORMAT,
+        )
         if isinstance(data, dict) and primary_parse_ok:
             extracted_fields = data.get("fields") or []
             updates += _apply_extracted_fields(
@@ -1573,9 +1599,14 @@ def _render_intake(
                     ),
                     instructions=FILL_MISSING_INSTRUCTIONS,
                     max_output_tokens=320,
+                    response_format=FILL_RESPONSE_FORMAT,
                 )
                 _log_llm_raw_response(fill_raw, context=context_label)
-                fill_data, parse_ok = _parse_or_warn(fill_raw, context=context_label)
+                fill_data, parse_ok = _parse_or_warn(
+                    fill_raw,
+                    context=context_label,
+                    response_format=FILL_RESPONSE_FORMAT,
+                )
                 if isinstance(fill_data, dict) and parse_ok:
                     fill_fields = fill_data.get("fields") or []
                     updates += _apply_extracted_fields(
@@ -1634,10 +1665,13 @@ def _render_intake(
             ),
             instructions=FILL_MISSING_INSTRUCTIONS,
             max_output_tokens=600,
+            response_format=FILL_RESPONSE_FORMAT,
         )
         _log_llm_raw_response(fill_raw, context="intake_fill_missing")
         fill_data, fill_parse_ok = _parse_or_warn(
-            fill_raw, context="intake_fill_missing"
+            fill_raw,
+            context="intake_fill_missing",
+            response_format=FILL_RESPONSE_FORMAT,
         )
         if isinstance(fill_data, dict) and fill_parse_ok:
             fill_fields = fill_data.get("fields") or []
@@ -1667,10 +1701,13 @@ def _render_intake(
             ),
             instructions=SUGGEST_MISSING_INSTRUCTIONS,
             max_output_tokens=800,
+            response_format=SUGGEST_RESPONSE_FORMAT,
         )
         _log_llm_raw_response(suggest_raw, context="intake_suggest_missing")
         suggest_data, suggest_parse_ok = _parse_or_warn(
-            suggest_raw, context="intake_suggest_missing"
+            suggest_raw,
+            context="intake_suggest_missing",
+            response_format=SUGGEST_RESPONSE_FORMAT,
         )
         if isinstance(suggest_data, dict) and suggest_parse_ok:
             suggested_fields = suggest_data.get("suggestions") or []
@@ -2292,9 +2329,17 @@ def _translate_fields_to_english(
             translate_user_prompt(payload),
             instructions=TRANSLATE_INSTRUCTIONS,
             max_output_tokens=800,
+            response_format=TRANSLATION_RESPONSE_FORMAT,
         )
         _log_llm_raw_response(raw, context="translate_fields")
-        data = safe_parse_json(raw)
+        data, parse_ok = parse_structured_response(
+            raw,
+            response_format=TRANSLATION_RESPONSE_FORMAT,
+            context="translate_fields",
+        )
+        if not parse_ok:
+            st.error(t(lang, "ui.translate_failed"))
+            return
         updates = 0
         if isinstance(data, dict):
             for path in [

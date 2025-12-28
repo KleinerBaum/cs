@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import re
+import logging
 from typing import Any, Iterable
+
+from jsonschema import Draft7Validator
 
 from openai import OpenAI
 
@@ -11,6 +14,7 @@ from .settings import DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_MODEL
 from .utils import clamp_str
 
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
+_LOGGER = logging.getLogger(__name__)
 
 EXTRACTION_INSTRUCTIONS = (
     "You extract structured information from job ads. Return valid JSON with"
@@ -25,6 +29,47 @@ EXTRACTION_INSTRUCTIONS = (
     " explaining the absence."
 )
 
+FIELD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["path", "value", "confidence", "evidence"],
+    "properties": {
+        "path": {"type": "string"},
+        "value": {
+            "oneOf": [
+                {"type": "string"},
+                {"type": "number"},
+                {"type": "array"},
+                {"type": "boolean"},
+                {"type": "object"},
+                {"type": "null"},
+            ]
+        },
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence": {"type": "string"},
+    },
+}
+
+EXTRACTION_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "detected_language": {"type": "string", "minLength": 2, "maxLength": 8},
+        "fields": {"type": "array", "items": FIELD_SCHEMA},
+    },
+}
+
+FILL_JSON_SCHEMA = EXTRACTION_JSON_SCHEMA
+
+SUGGEST_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "suggestions": {"type": "array", "items": FIELD_SCHEMA},
+        "detected_language": {"type": "string", "minLength": 2, "maxLength": 8},
+    },
+}
+
 FOLLOWUP_INSTRUCTIONS = (
     "Generate follow-up questions for missing profile fields. Return JSON"
     " with a 'questions' list. Each item must include 'target_path',"
@@ -38,6 +83,17 @@ TRANSLATE_INSTRUCTIONS = (
     " structure. Return JSON mapping the target schema keys to translated"
     " values. Keep bullet points separated by newlines when appropriate."
 )
+
+TRANSLATION_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        Keys.POSITION_TITLE_EN: {"type": ["string", "null", "array"]},
+        Keys.HARD_REQ_EN: {"type": ["string", "null", "array"]},
+        Keys.SOFT_REQ_EN: {"type": ["string", "null", "array"]},
+        Keys.TOOLS_EN: {"type": ["string", "null", "array"]},
+    },
+}
 
 FILL_MISSING_INSTRUCTIONS = (
     "Recover missing required job-ad fields using the provided source text"
@@ -59,6 +115,27 @@ SUGGEST_MISSING_INSTRUCTIONS = (
     "text to stay realistic. If the text is silent, propose the most reasonable "
     "default for the role and explain your reasoning. Avoid null/empty values."
 )
+
+
+EXTRACTION_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {"name": "PrimaryExtraction", "schema": EXTRACTION_JSON_SCHEMA},
+}
+
+FILL_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {"name": "FillMissingExtraction", "schema": FILL_JSON_SCHEMA},
+}
+
+SUGGEST_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {"name": "SuggestedFields", "schema": SUGGEST_JSON_SCHEMA},
+}
+
+TRANSLATION_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {"name": "FieldTranslations", "schema": TRANSLATION_JSON_SCHEMA},
+}
 
 
 class LLMClient:
@@ -179,6 +256,58 @@ def safe_parse_json(raw: str) -> Any:
     raise ValueError(
         f"Could not parse JSON from model output. Preview: {preview}\nError: {last_error}"
     )
+
+
+def _schema_from_response_format(response_format: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not response_format or response_format.get("type") != "json_schema":
+        return None
+    json_schema = response_format.get("json_schema")
+    if not isinstance(json_schema, dict):
+        return None
+    schema = json_schema.get("schema")
+    return schema if isinstance(schema, dict) else None
+
+
+def validate_structured_payload(
+    payload: Any, *, schema: dict[str, Any], context: str
+) -> bool:
+    validator = Draft7Validator(schema)
+    errors = sorted(validator.iter_errors(payload), key=lambda e: e.path)
+    if errors:
+        preview = clamp_str(str(payload), 400)
+        first = errors[0]
+        _LOGGER.warning(
+            "LLM response failed schema validation (%s): %s [path=%s preview=%s]",
+            context,
+            first.message,
+            list(first.absolute_path),
+            preview,
+        )
+        return False
+    return True
+
+
+def parse_structured_response(
+    raw: str | None, *, response_format: dict[str, Any], context: str
+) -> tuple[Any, bool]:
+    normalized_raw = raw or ""
+    try:
+        parsed = safe_parse_json(normalized_raw)
+    except ValueError as exc:
+        preview = clamp_str(normalized_raw, 400)
+        _LOGGER.warning(
+            "JSON parsing failed during %s; dropping response. error=%s preview=%s",
+            context,
+            exc,
+            preview,
+        )
+        return {}, False
+
+    schema = _schema_from_response_format(response_format)
+    if schema and not validate_structured_payload(parsed, schema=schema, context=context):
+        return {}, False
+
+    return parsed, True
 
 
 def extraction_user_prompt(source_text: str) -> str:
