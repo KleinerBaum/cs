@@ -17,6 +17,13 @@ class TestCityExtraction:
 
         assert result.location == "Düsseldorf"
 
+    def test_city_cleaning_stops_at_lowercase_non_connector(self) -> None:
+        extractor = TextExtractor()
+
+        result = extractor.extract(RawInput(text="in Düsseldorf eine"))
+
+        assert result.location == "Düsseldorf"
+
     def test_multi_word_city_remains_intact(self) -> None:
         text = (
             "Standort: Frankfurt am Main\n"
@@ -38,3 +45,19 @@ class TestCityExtraction:
         result = extractor.extract(RawInput(text=text))
 
         assert result.location == "Villingen-Schwenningen"
+
+    def test_multi_word_city_including_connector_is_preserved(self) -> None:
+        text = "Location: Rio de Janeiro"
+        extractor = TextExtractor()
+
+        result = extractor.extract(RawInput(text=text))
+
+        assert result.location == "Rio de Janeiro"
+
+    def test_abbreviated_connector_results_in_partial_city(self) -> None:
+        text = "Ort: Bad Homburg v. d. Höhe"
+        extractor = TextExtractor()
+
+        result = extractor.extract(RawInput(text=text))
+
+        assert result.location == "Bad Homburg"
