@@ -20,6 +20,13 @@ from openai import (
     OpenAI,
 )
 
+from core.profile_extractor import (
+    ALLOWED_CONTRACT_TYPES,
+    ALLOWED_EMPLOYMENT_TYPES,
+    normalize_start_date,
+    extract_profile_required_fields,
+)
+
 from .esco_client import ESCOError, occupation_related_skills, search_occupations
 from .i18n import LANG_DE, LANG_EN, as_lang, option_label, t
 from .ingest import (
@@ -177,6 +184,49 @@ _LANGUAGE_KEYWORDS: dict[str, str] = {
     "franz": "French",
     "spanish": "Spanish",
     "spanisch": "Spanish",
+}
+
+_PROFILE_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "profile_required_fields",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "company_name": {"type": "string"},
+                "primary_city": {"type": "string"},
+                "employment_type": {
+                    "type": "string",
+                    "enum": sorted(ALLOWED_EMPLOYMENT_TYPES),
+                },
+                "contract_type": {
+                    "type": "string",
+                    "enum": sorted(ALLOWED_CONTRACT_TYPES),
+                },
+                "start_date": {"type": "string"},
+                "evidence": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "company_name": {"type": "string"},
+                        "primary_city": {"type": "string"},
+                        "employment_type": {"type": "string"},
+                        "contract_type": {"type": "string"},
+                        "start_date": {"type": "string"},
+                    },
+                },
+            },
+        },
+    },
+}
+
+_PROFILE_FIELD_MAP = {
+    Keys.COMPANY_NAME: "company_name",
+    Keys.LOCATION_CITY: "primary_city",
+    Keys.EMPLOYMENT_TYPE: "employment_type",
+    Keys.EMPLOYMENT_CONTRACT: "contract_type",
+    Keys.EMPLOYMENT_START: "start_date",
 }
 
 _CITY_PATTERNS: list[re.Pattern[str]] = [
@@ -421,6 +471,134 @@ def _find_city(text: str, name: str | None) -> str | None:
             if cleaned and 2 <= len(cleaned) <= 60 and cleaned[0].isupper():
                 return cleaned
     return None
+
+
+def _apply_regex_profile_extraction(
+    profile: dict[str, Any], source_doc: SourceDocument
+) -> int:
+    result = extract_profile_required_fields(source_doc.text)
+    updates = 0
+
+    if result.company_name and upsert_field(
+        profile,
+        Keys.COMPANY_NAME,
+        result.company_name,
+        provenance="extracted",
+        confidence=0.9,
+        evidence=result.evidence.get("company_name"),
+    ):
+        updates += 1
+    if result.primary_city and upsert_field(
+        profile,
+        Keys.LOCATION_CITY,
+        result.primary_city,
+        provenance="extracted",
+        confidence=0.9,
+        evidence=result.evidence.get("primary_city"),
+    ):
+        updates += 1
+    if result.employment_type in ALLOWED_EMPLOYMENT_TYPES and upsert_field(
+        profile,
+        Keys.EMPLOYMENT_TYPE,
+        result.employment_type,
+        provenance="extracted",
+        confidence=0.85,
+        evidence=result.evidence.get("employment_type"),
+    ):
+        updates += 1
+    if result.contract_type in ALLOWED_CONTRACT_TYPES and upsert_field(
+        profile,
+        Keys.EMPLOYMENT_CONTRACT,
+        result.contract_type,
+        provenance="extracted",
+        confidence=0.85,
+        evidence=result.evidence.get("contract_type"),
+    ):
+        updates += 1
+    if result.start_date:
+        start_value = normalize_start_date(result.start_date) or (
+            "ASAP" if result.start_date.upper() == "ASAP" else None
+        )
+        if start_value and upsert_field(
+            profile,
+            Keys.EMPLOYMENT_START,
+            start_value,
+            provenance="extracted",
+            confidence=0.80,
+            evidence=result.evidence.get("start_date"),
+        ):
+            updates += 1
+    return updates
+
+
+def _profile_fallback_prompt(missing_paths: list[str], source_text: str) -> str:
+    readable = ", ".join(
+        _PROFILE_FIELD_MAP[p] for p in missing_paths if p in _PROFILE_FIELD_MAP
+    )
+    return (
+        "Extract ONLY the missing profile fields from the job ad. Return JSON with "
+        "company_name, primary_city, employment_type, contract_type, start_date, and "
+        "an evidence map (<=15 words per entry)."
+        f" Missing: {readable}.\nSource text:\n---\n{source_text}\n---"
+    )
+
+
+def _apply_llm_profile_fallback(
+    profile: dict[str, Any],
+    missing_paths: list[str],
+    source_doc: SourceDocument,
+    *,
+    client: LLMClient,
+) -> int:
+    if not missing_paths:
+        return 0
+
+    raw = client.text(
+        _profile_fallback_prompt(
+            missing_paths, source_doc.text[:MAX_SOURCE_TEXT_CHARS]
+        ),
+        instructions=(
+            "Fill only the requested fields. Use allowed enum values; leave empty when uncertain."
+        ),
+        max_output_tokens=480,
+        response_format=_PROFILE_SCHEMA,
+    )
+    parsed = safe_parse_json(raw) if raw else {}
+    updates = 0
+
+    for path in missing_paths:
+        field_key = _PROFILE_FIELD_MAP.get(path)
+        if not field_key:
+            continue
+        value = parsed.get(field_key) if isinstance(parsed, dict) else None
+        if not isinstance(value, str):
+            continue
+
+        if path == Keys.EMPLOYMENT_TYPE and value not in ALLOWED_EMPLOYMENT_TYPES:
+            continue
+        if path == Keys.EMPLOYMENT_CONTRACT and value not in ALLOWED_CONTRACT_TYPES:
+            continue
+        if path == Keys.EMPLOYMENT_START:
+            value = normalize_start_date(value) or (
+                "ASAP" if value.upper() == "ASAP" else None
+            )
+            if not value:
+                continue
+
+        evidence_map = parsed.get("evidence") if isinstance(parsed, dict) else {}
+        evidence_val = (
+            evidence_map.get(field_key) if isinstance(evidence_map, Mapping) else None
+        )
+        if upsert_field(
+            profile,
+            path,
+            value,
+            provenance="extracted",
+            confidence=0.65,
+            evidence=str(evidence_val) if evidence_val else None,
+        ):
+            updates += 1
+    return updates
 
 
 def _heuristic_fill_required_fields(
@@ -1311,18 +1489,32 @@ def _render_intake(
             )
             return {}, False
 
+    updates = _apply_regex_profile_extraction(profile, source_doc)
+
     data: dict[str, Any] = {}
     extracted_fields: list[Any] = []
-    updates = 0
     suggestion_updates = 0
     client: LLMClient | None = None
     llm_error: str | None = None
     primary_parse_ok = True
     source_excerpt = source_doc.text[:MAX_SOURCE_TEXT_CHARS]
+    missing_profile_paths = [
+        path for path in _PROFILE_FIELD_MAP if is_missing(profile, path)
+    ]
 
     try:
         # Use LLM to extract fields from the source text
         client = LLMClient(api_key=api_key, model=model)
+        if missing_profile_paths:
+            updates += _apply_llm_profile_fallback(
+                profile,
+                missing_profile_paths,
+                source_doc,
+                client=client,
+            )
+            missing_profile_paths = [
+                path for path in _PROFILE_FIELD_MAP if is_missing(profile, path)
+            ]
         raw = client.text(
             extraction_user_prompt(source_excerpt),
             instructions=EXTRACTION_INSTRUCTIONS,
