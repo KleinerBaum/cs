@@ -101,3 +101,14 @@ def test_llm_fallback_limits_to_requested_fields() -> None:
     assert result.department == "Finance"
     assert result.job_title is None
     assert result.seniority_level is None
+
+
+def test_llm_fallback_ignores_schema_invalid_payload() -> None:
+    payload = '{"job_title": 123, "seniority_level": null}'
+    client = DummyLLMClient(payload)
+
+    result = llm_fill_role_fields("irrelevant", client=cast(LLMClient, client))
+
+    assert result.job_title is None
+    assert result.seniority_level is None
+    assert result.department is None

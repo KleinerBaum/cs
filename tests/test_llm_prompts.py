@@ -3,7 +3,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from src.llm_prompts import LLMClient, response_to_text, safe_parse_json
+from src.llm_prompts import (
+    EXTRACTION_RESPONSE_FORMAT,
+    LLMClient,
+    parse_structured_response,
+    response_to_text,
+    safe_parse_json,
+)
 from src.settings import DEFAULT_MODEL
 
 
@@ -125,3 +131,14 @@ def test_llm_client_intake_call_path_does_not_raise_type_error(
         "max_output_tokens": 64,
         "text": {"format": {"type": "json_object"}},
     }
+
+
+def test_parse_structured_response_rejects_invalid_payload() -> None:
+    raw = json.dumps({"fields": [{"path": "x"}]})
+
+    parsed, ok = parse_structured_response(
+        raw, response_format=EXTRACTION_RESPONSE_FORMAT, context="invalid_extraction"
+    )
+
+    assert not ok
+    assert parsed == {}

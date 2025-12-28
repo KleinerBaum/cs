@@ -6,7 +6,7 @@ from typing import Any, Iterable
 
 from openai import APIConnectionError, APITimeoutError, BadRequestError, OpenAI
 
-from src.llm_prompts import response_to_text, safe_parse_json
+from src.llm_prompts import parse_structured_response, response_to_text
 from state import AppState
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,35 @@ _DEFAULT_ALLOWED = {
     "text",
     "temperature",
     "top_p",
+}
+
+_TASKS_RESPONSE_FORMAT: dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "GeneratedTasks",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"tasks": {"type": "array", "items": {"type": "string"}}},
+            "required": ["tasks"],
+        },
+    },
+}
+
+_SKILLS_RESPONSE_FORMAT: dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "SuggestedSkills",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "must_have": {"type": "array", "items": {"type": "string"}},
+                "nice_to_have": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["must_have", "nice_to_have"],
+        },
+    },
 }
 
 
@@ -118,19 +147,18 @@ def generate_tasks(
         model=model,
         input=prompt,
         instructions="Return JSON with a 'tasks' list of strings.",
-        response_format={"type": "json_object"},
+        response_format=_TASKS_RESPONSE_FORMAT,
         max_output_tokens=480,
     )
-    try:
-        parsed = safe_parse_json(raw)
-        tasks = parsed.get("tasks") if isinstance(parsed, dict) else None
+    parsed, ok = parse_structured_response(
+        raw, response_format=_TASKS_RESPONSE_FORMAT, context="generate_tasks"
+    )
+    if ok and isinstance(parsed, dict):
+        tasks = parsed.get("tasks")
         if isinstance(tasks, list):
             return [str(t).strip() for t in tasks if str(t).strip()]
-    except ValueError as exc:
-        logger.warning("Could not parse tasks JSON: %s", exc)
-    return [
-        line.strip().lstrip("-•").strip() for line in raw.splitlines() if line.strip()
-    ]
+    logger.warning("Task generation returned invalid schema; skipping update.")
+    return []
 
 
 def suggest_skills(
@@ -149,24 +177,22 @@ def suggest_skills(
         model=model,
         input=prompt,
         instructions=("Return JSON with 'must_have' and 'nice_to_have' list keys."),
-        response_format={"type": "json_object"},
+        response_format=_SKILLS_RESPONSE_FORMAT,
         max_output_tokens=520,
     )
-    try:
-        parsed = safe_parse_json(raw)
-        if isinstance(parsed, dict):
-            must_have = parsed.get("must_have")
-            nice_to_have = parsed.get("nice_to_have")
-            return {
-                "must_have": [
-                    str(x).strip() for x in must_have or [] if str(x).strip()
-                ],
-                "nice_to_have": [
-                    str(x).strip() for x in nice_to_have or [] if str(x).strip()
-                ],
-            }
-    except ValueError as exc:
-        logger.warning("Could not parse skills JSON: %s", exc)
+    parsed, ok = parse_structured_response(
+        raw, response_format=_SKILLS_RESPONSE_FORMAT, context="suggest_skills"
+    )
+    if ok and isinstance(parsed, dict):
+        must_have = parsed.get("must_have")
+        nice_to_have = parsed.get("nice_to_have")
+        return {
+            "must_have": [str(x).strip() for x in must_have or [] if str(x).strip()],
+            "nice_to_have": [
+                str(x).strip() for x in nice_to_have or [] if str(x).strip()
+            ],
+        }
+    logger.warning("Skill suggestion returned invalid schema; skipping update.")
     return {"must_have": [], "nice_to_have": []}
 
 
