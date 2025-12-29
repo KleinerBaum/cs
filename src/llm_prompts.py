@@ -143,6 +143,20 @@ class LLMClient:
         self.client = OpenAI(api_key=api_key)
         self.model = model
 
+    def _format_with_name(self, structured_format: dict[str, Any]) -> dict[str, Any]:
+        format_payload = dict(structured_format)
+
+        name = format_payload.get("name")
+        if not isinstance(name, str):
+            json_schema = format_payload.get("json_schema")
+            if isinstance(json_schema, dict):
+                schema_name = json_schema.get("name")
+                if isinstance(schema_name, str):
+                    name = schema_name
+
+        format_payload["name"] = name or "StructuredResponse"
+        return format_payload
+
     def text(
         self,
         input_text: str,
@@ -152,12 +166,13 @@ class LLMClient:
         response_format: dict[str, Any] | None = None,
     ) -> str:
         structured_format = response_format or {"type": "json_object"}
+        format_payload = self._format_with_name(structured_format)
         resp = self.client.responses.create(
             model=self.model,
             input=input_text,
             instructions=instructions,
             max_output_tokens=max_output_tokens,
-            text={"format": structured_format},
+            text={"format": format_payload},
         )
         return response_to_text(resp)
 
