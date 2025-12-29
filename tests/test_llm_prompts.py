@@ -75,7 +75,26 @@ def test_llm_client_requests_structured_output(monkeypatch: Any) -> None:
     assert parsed == {"ok": True}
     assert client.client.responses.last_kwargs is not None
     assert client.client.responses.last_kwargs.get("text") == {
-        "format": {"type": "json_object"}
+        "format": {"type": "json_object", "name": "StructuredResponse"}
+    }
+
+
+def test_llm_client_uses_schema_name_for_format(monkeypatch: Any) -> None:
+    monkeypatch.setattr("src.llm_prompts.OpenAI", _FakeOpenAI)
+
+    client = LLMClient(api_key="sk-test", model=DEFAULT_MODEL)
+
+    text = client.text("hi", instructions="return json", response_format=EXTRACTION_RESPONSE_FORMAT)
+    parsed = json.loads(text)
+
+    assert parsed == {"ok": True}
+    assert client.client.responses.last_kwargs is not None
+    assert client.client.responses.last_kwargs.get("text") == {
+        "format": {
+            "type": "json_schema",
+            "name": "PrimaryExtraction",
+            "json_schema": EXTRACTION_RESPONSE_FORMAT["json_schema"],
+        }
     }
 
 
@@ -129,7 +148,7 @@ def test_llm_client_intake_call_path_does_not_raise_type_error(
         "input": "intake prompt",
         "instructions": "return json",
         "max_output_tokens": 64,
-        "text": {"format": {"type": "json_object"}},
+        "text": {"format": {"type": "json_object", "name": "StructuredResponse"}},
     }
 
 
