@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Added regex-first mandatory field extraction (company, city, employment/contract type, start date, role, seniority, departmen
+t) plus a city sanitizer that trims trailing stopwords (e.g., "Düsseldorf eine" → "Düsseldorf") with dedicated tests and a DE fi
+xture.
 - Switched the centralized OpenAI model config to default to `gpt-5-nano`,
   honoring `CS_OPENAI_MODEL` (with legacy override fallback) and ensuring all
   LLM entry points share the same resolution with updated tests and docs.
