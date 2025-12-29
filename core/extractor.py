@@ -7,12 +7,24 @@ from dataclasses import dataclass, field
 import re
 from typing import Dict, List, Protocol
 
+from core.regex_fields import (
+    clean_city,
+    extract_company_name,
+    extract_contract_type,
+    extract_department,
+    extract_desired_start_date,
+    extract_employment_type,
+    extract_job_title,
+    extract_primary_city,
+    extract_seniority,
+)
 from core.schemas import RawInput
 from core.role_extractor import (
     clean_title,
     detect_seniority_level,
     extract_role_required_fields,
 )
+from src.keys import Keys
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +39,11 @@ class ExtractionResult:
     company: str | None = None
     location: str | None = None
     employment_type: str | None = None
+    contract_type: str | None = None
+    start_date: str | None = None
     responsibilities: List[str] = field(default_factory=list)
     must_have_skills: List[str] = field(default_factory=list)
+    schema_fields: Dict[str, object] = field(default_factory=dict)
 
 
 class BaseExtractor(Protocol):
@@ -40,53 +55,14 @@ class BaseExtractor(Protocol):
         """Parse raw input into structured fields."""
 
 
-CONNECTOR_WORDS = {
-    "am",
-    "an",
-    "im",
-    "in",
-    "bei",
-    "der",
-    "die",
-    "das",
-    "de",
-    "del",
-    "della",
-    "da",
-    "do",
-    "dos",
-    "du",
-    "van",
-    "von",
-    "of",
-    "la",
-    "le",
-}
-
-
-def clean_city(raw: str) -> str:
-    """Normalize a raw city string while keeping meaningful multi-word names intact."""
-
-    sanitized = " ".join(raw.split()).strip(",.;:()[]")
-    if not sanitized:
-        return sanitized
-
-    tokens = sanitized.split(" ")
-    trimmed: list[str] = []
-
-    for token in tokens:
-        if token and (token[0].isupper() or token[0] in "ÄÖÜ"):
-            trimmed.append(token)
-            continue
-        if token.lower() in CONNECTOR_WORDS:
-            trimmed.append(token)
-            continue
-        break
-
-    if not trimmed:
-        return sanitized
-
-    return " ".join(trimmed)
+def _set_schema_field(
+    payload: Dict[str, object], key: str, value: object | None
+) -> None:
+    if value is None:
+        return
+    if isinstance(value, str) and not value.strip():
+        return
+    payload[key] = value
 
 
 class TextExtractor:
@@ -173,6 +149,7 @@ class TextExtractor:
     def extract(self, raw: RawInput) -> ExtractionResult:
         content = raw.content
         result = ExtractionResult()
+        schema_fields: Dict[str, object] = {}
 
         lines = [line.strip() for line in content.splitlines() if line.strip()]
         lowered = content.lower()
@@ -182,18 +159,64 @@ class TextExtractor:
         result.seniority = role_fields.seniority_level
         result.department = role_fields.department
 
-        result.company = self._extract_company(content)
+        result.company = extract_company_name(content) or self._extract_company(content)
+
+        regex_seniority = extract_seniority(content)
+        if regex_seniority:
+            result.seniority = regex_seniority
         if not result.seniority:
             result.seniority = self._extract_seniority(lowered)
         if not result.seniority and result.job_title:
             result.seniority = detect_seniority_level(result.job_title)
-        result.job_title = self._extract_job_title(lines, result.seniority, content)
+
+        job_title_candidate = extract_job_title(content)
+        if job_title_candidate:
+            result.job_title = job_title_candidate
+        if not result.job_title:
+            result.job_title = self._extract_job_title(lines, result.seniority, content)
         if not result.job_title and role_fields.job_title:
             result.job_title = role_fields.job_title
-        result.location = self._extract_location(content)
-        result.employment_type = self._extract_employment_type(lowered)
+
+        result.location = extract_primary_city(content)
+        if not result.location:
+            result.location = self._extract_location(content)
+
+        result.employment_type = extract_employment_type(content)
+        if not result.employment_type:
+            result.employment_type = self._extract_employment_type(lowered)
+
+        result.contract_type = extract_contract_type(content)
+
+        start_date_info = extract_desired_start_date(content)
+        if start_date_info:
+            result.start_date = start_date_info.get(
+                "normalized"
+            ) or start_date_info.get("raw")
+
+        department_candidate = extract_department(content)
+        if department_candidate:
+            result.department = department_candidate
+
         result.responsibilities = self._extract_responsibilities(lines)
         result.must_have_skills = self._extract_skills(lowered)
+
+        if (
+            result.seniority
+            and result.job_title
+            and result.seniority not in result.job_title
+        ):
+            result.job_title = f"{result.seniority} {result.job_title}"
+
+        _set_schema_field(schema_fields, Keys.COMPANY_NAME, result.company)
+        _set_schema_field(schema_fields, Keys.POSITION_TITLE, result.job_title)
+        _set_schema_field(schema_fields, Keys.POSITION_SENIORITY, result.seniority)
+        _set_schema_field(schema_fields, Keys.TEAM_DEPT, result.department)
+        _set_schema_field(schema_fields, Keys.LOCATION_CITY, result.location)
+        _set_schema_field(schema_fields, Keys.EMPLOYMENT_TYPE, result.employment_type)
+        _set_schema_field(schema_fields, Keys.EMPLOYMENT_CONTRACT, result.contract_type)
+        _set_schema_field(schema_fields, Keys.EMPLOYMENT_START, result.start_date)
+
+        result.schema_fields = schema_fields
 
         return result
 

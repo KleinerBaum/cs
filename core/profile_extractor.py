@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict
 
-from core.extractor import clean_city
+from core.regex_fields import clean_city
 
 # Allowed values align with UI expectations and validation helpers
 ALLOWED_EMPLOYMENT_TYPES = {

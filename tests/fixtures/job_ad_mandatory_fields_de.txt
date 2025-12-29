@@ -1,0 +1,8 @@
+Unternehmensname: ACME GmbH
+Hauptstandort/Stadt: Düsseldorf eine
+Anstellungsart: Vollzeit
+Vertragsart: Unbefristet
+Gewünschtes Startdatum: ab sofort
+Jobtitel: Senior Software Engineer
+Seniority Level: Senior
+Abteilung: IT
